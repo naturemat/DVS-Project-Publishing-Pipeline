@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.xlsx
+!Fuente_Datos/.gitkeep
+!output/.gitkeep
+output/*
+!output/.gitkeep
+~$*
+*.bak
+.DS_Store
+Thumbs.db

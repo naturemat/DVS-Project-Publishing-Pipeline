@@ -1,0 +1,47 @@
+[
+  {
+    "code": "P1",
+    "name": "Salud Integral y Bienestar",
+    "coordinador": "Cecilia Belén Molina Jaramillo"
+  },
+  {
+    "code": "P2",
+    "name": "Derechos, Inclusión y Atención a Grupos en Situación de Vulnerabilidad",
+    "coordinador": "Gladys Anabel Caiza Changoluisa"
+  },
+  {
+    "code": "P3",
+    "name": "Desarrollo Sostenible, Territorios, Hábitat, Ambiente Construido, Fortalecimiento y Desarrollo Local",
+    "coordinador": "Jorge Antonio Piedra Rosales"
+  },
+  {
+    "code": "P4",
+    "name": "Vida, Ecosistemas, Energías Accesibles y Derechos de la Naturaleza",
+    "coordinador": "Juan Gabriel Coloma Martínez"
+  },
+  {
+    "code": "P5",
+    "name": "Cambio Climático, Vulnerabilidad y Riesgo",
+    "coordinador": "Diana Karina Fabara Salazar"
+  },
+  {
+    "code": "P6",
+    "name": "Desarrollo Productivo, Económico y Financiero, Modelo de Producción",
+    "coordinador": "Guillermo Herrera Villarreal"
+  },
+  {
+    "code": "P7",
+    "name": "Industria, Producción, Innovación y Consumo Responsable",
+    "coordinador": "Gilda Graciela Gordillo Vinueza"
+  },
+  {
+    "code": "P8",
+    "name": "Desarrollo Educativo, Social, Comunicacional, Artístico-Cultural",
+    "coordinador": "Patricia Manzano Aguas"
+  },
+  {
+    "code": "P9",
+    "name": "Fomento de la Interculturalidad, Nacionalidades y Pueblos; Patrimonio Tangible e Intangible, Saberes Ancestrales",
+    "coordinador": "Diana Elizabeth Villamar Flores"
+  }
+]
