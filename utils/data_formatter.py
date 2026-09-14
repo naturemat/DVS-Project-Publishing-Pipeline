@@ -1,28 +1,122 @@
 import re
-from datetime import datetime
+import unicodedata
+from datetime import datetime, date
 from .column_mapper import ColumnMapper
 from .proper_nouns import PROPER_NOUNS, ACRONYMS, TITLE_PREFIXES, MINOR_WORDS
 from .proper_nouns import ACCENT_FIX
 
 
+SPANISH_MONTHS = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+DATE_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%Y.%m.%d",
+    "%d/%m/%y",
+    "%d-%m-%y",
+)
+
+
 class DataFormatter:
 
-    @staticmethod
-    def parse_date(value):
+    @classmethod
+    def parse_date(cls, value):
         if value is None:
             return None
         if isinstance(value, datetime):
             return value.strftime("%d/%m/%Y")
+        if isinstance(value, date):
+            return value.strftime("%d/%m/%Y")
         s = str(value).strip()
-        if not s or s == "None":
+        if not s or s.lower() == "none":
             return None
-        for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%Y.%m.%d"]:
+        dt = cls._try_parse_date(s)
+        if dt is None:
+            return None
+        return dt.strftime("%d/%m/%Y")
+
+    @staticmethod
+    def _strip_accents(text):
+        normalized = unicodedata.normalize("NFD", text)
+        return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+
+    @staticmethod
+    def _safe_date(year, month, day):
+        try:
+            return datetime(year, month, day)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _full_year(value):
+        if value < 100:
+            return value + 2000 if value < 50 else value + 1900
+        return value
+
+    @classmethod
+    def _try_parse_date(cls, text):
+        cleaned = re.sub(r"\s+", " ", text.strip())
+        if not cleaned:
+            return None
+        for fmt in DATE_FORMATS:
             try:
-                dt = datetime.strptime(s.split()[0] if " " in s else s, fmt.split()[0])
-                return dt.strftime("%d/%m/%Y")
+                return datetime.strptime(cleaned, fmt)
             except ValueError:
                 continue
-        return s
+        dt = cls._parse_text_month(cleaned)
+        if dt is not None:
+            return dt
+        return cls._parse_numeric(cleaned)
+
+    @classmethod
+    def _parse_text_month(cls, text):
+        lowered = cls._strip_accents(text.lower())
+        month = None
+        for name, num in SPANISH_MONTHS.items():
+            if re.search(r"\b" + name + r"\b", lowered):
+                month = num
+                break
+        if month is None:
+            return None
+        numbers = [int(m.group()) for m in re.finditer(r"\d+", text)]
+        year = None
+        day = None
+        for num in numbers:
+            if year is None and (num > 31 or (len(str(num)) == 4 and 1900 <= num <= 2100)):
+                year = num
+            elif day is None and 1 <= num <= 31:
+                day = num
+        if year is None or day is None:
+            return None
+        return cls._safe_date(cls._full_year(year), month, day)
+
+    @classmethod
+    def _parse_numeric(cls, text):
+        cleaned = re.sub(r"\s*([/\-.])\s*", r"\1", text).replace(" ", "")
+        compact = re.match(r"^(\d{1,2})/(\d{2})(\d{4})$", cleaned)
+        if compact:
+            day, month, year = (int(g) for g in compact.groups())
+            return cls._safe_date(year, month, day)
+        parts = re.split(r"[/\-.]", cleaned)
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            return None
+        a, b, c = (int(p) for p in parts)
+        if a > 31 or len(parts[0]) == 4:
+            dt = cls._safe_date(cls._full_year(a), b, c)
+            if dt is not None:
+                return dt
+            return cls._safe_date(cls._full_year(a), c, b)
+        dt = cls._safe_date(cls._full_year(c), b, a)
+        if dt is not None:
+            return dt
+        return cls._safe_date(cls._full_year(c), a, b)
 
     @classmethod
     def title_case(cls, value):

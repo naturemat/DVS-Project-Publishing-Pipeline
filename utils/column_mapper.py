@@ -61,6 +61,28 @@ class ColumnMapper:
         "25-25": "2025-2025",
         "25-26": "2025-2026",
         "26-26": "2026-2026",
+        "21-22": "2021-2022",
+        "22-23": "2022-2023",
+        "27-28": "2027-2028",
+    }
+
+    EXAMPLE_LAYOUT = {
+        "Facultad": 2,
+        "Carrera": 3,
+        "NombreProyecto": 4,
+        "TipoProyecto": 5,
+        "idCodigo": 6,
+        "NombrePrograma": 7,
+        "NombreCoordinador": 8,
+        "Territorio": 9,
+        "FechaInicio": 10,
+        "FechaFin": 11,
+        "LinkLevantamientoBase": 12,
+        "LinkJuridico": 13,
+        "LinkConvenio": 14,
+        "LinkAprobacion": 15,
+        "LinkPlanificacion": 16,
+        "LinkCronogramaActividades": 17,
     }
 
     OUTPUT_COLUMNS = [
@@ -82,6 +104,12 @@ class ColumnMapper:
             return "25-26"
         elif "26-26" in fname:
             return "26-26"
+        elif "21-22" in fname:
+            return "21-22"
+        elif "22-23" in fname:
+            return "22-23"
+        elif "27-28" in fname:
+            return "27-28"
         return None
 
     @classmethod
@@ -93,6 +121,8 @@ class ColumnMapper:
             return cls.MAP_25_26
         elif period == "26-26":
             return cls.MAP_26_26
+        elif period in ("21-22", "22-23", "27-28"):
+            return cls.EXAMPLE_LAYOUT
         return None
 
     @classmethod
@@ -109,5 +139,8 @@ class ColumnMapper:
             "25-25": "2025",
             "25-26": "2026",
             "26-26": "2026",
+            "21-22": "2022",
+            "22-23": "2023",
+            "27-28": "2028",
         }
         return period_map.get(period, None)

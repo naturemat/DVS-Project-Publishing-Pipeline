@@ -5,6 +5,7 @@ __pycache__/
 .env
 *.xlsx
 !Fuente_Datos/.gitkeep
+!Fuente_Datos/EJEMPLO*.xlsx
 !output/.gitkeep
 output/*
 !output/.gitkeep

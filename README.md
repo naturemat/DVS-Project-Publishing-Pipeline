@@ -18,8 +18,11 @@ Excel_to_dtics/
 │   └── proper_nouns.py      # Proper nouns, acronyms, accent fixes (Spanish)
 ├── docs/
 │   └── spanish-text-formatting.md   # Detailed rules of the text engine
-├── Fuente_Datos/            # Source Excel files (gitignored)
-│   └── .gitkeep
+├── Fuente_Datos/            # Source Excel files (real ones gitignored)
+│   ├── .gitkeep
+│   ├── EJEMPLO PERIODO 21-22.xlsx   # Example with invented data (committed)
+│   ├── EJEMPLO PERIODO 22-23.xlsx   # Example with invented data (committed)
+│   └── EJEMPLO PERIODO 27-28.xlsx   # Example with invented data (committed)
 └── output/                  # Generated output (gitignored)
     ├── BDVinculacionn.xlsx  # Copy of base BD + analyzed period sheet
     └── missing_data_report.md
@@ -59,6 +62,28 @@ The pipeline runs in five stages:
 3. **Format** - `DataFormatter` normalizes every field: dates to `DD/MM/YYYY`, uppercase fields, sentence case, proper nouns, tildes.
 4. **Enrich** - `FacultadMatcher` matches the source faculty to the official names in `facultades.json`. If `NombrePrograma`/`NombreCoordinador` are missing, `Programas.json` is queried using the program number extracted from `idCodigo` (e.g., `P3AGR18` -> `P3`).
 5. **Write** - `write_to_output` writes into the existing period sheet (or creates it only if absent), sorts rows by `Facultad` then `NombreProyecto`, applies the base sheet formatting, colors rows, filters, and saves.
+
+### Example files
+
+`Fuente_Datos/` ships with three example workbooks (`EJEMPLO PERIODO 21-22.xlsx`, `EJEMPLO PERIODO 22-23.xlsx`, `EJEMPLO PERIODO 27-28.xlsx`) filled with **invented data**. They exist to show the exact input layout the program expects (title row, header row, data from row 3, `NRO` in column 1) and are safe to commit - they contain no real information. You can run any of them from the menu to test the tool without touching real data.
+
+### Date parsing
+
+`FechaInicio` and `FechaFin` are parsed robustly. A value is written as `DD/MM/YYYY` only when it is a real calendar date; anything else is left blank (and the row is reported as missing that date). Supported inputs include:
+
+| Input | Output |
+|-------|--------|
+| Native Excel date | `01/04/2025` |
+| `2025-04-01` / `2025-04-01 00:00:00` | `01/04/2025` |
+| `01/04/2025`, `1-4-2025`, `2025.04.01` | `01/04/2025` |
+| `12 Septiembre 2026`, `01 de febrero de 2025`, `1 de ABRIL DEL 2027` | `12/09/2026`, `01/02/2025`, `01/04/2027` |
+| `Octubre 1/2024`, `Septiembre 30/2026`, `octubre 10,2023` | `01/10/2024`, `30/09/2026`, `10/10/2023` |
+| US order `10/31/2026` (auto-detected when day > 12) | `31/10/2026` |
+| `FALTA`, `NO EXISTE`, `FECHA QUE INICIO EL PROYECTO`, `periodo 24-25` | *(blank)* |
+| Invalid dates such as `31/02/2026` | *(blank)* |
+| Partial dates without a day, e.g. `marzo de 2025` | *(blank)* |
+
+Invalid or incomplete dates are never copied as text. They leave the cell empty, which correctly marks the row as missing that date.
 
 ### Link fields
 
@@ -180,7 +205,8 @@ Rows completed this way are marked **orange**.
 
 ## Extending
 
-- **New period** - add a column map in `utils/column_mapper.py` (`MAP_XX_XX`), a sheet mapping, and a period/year mapping.
+- **New period** - add a column map in `utils/column_mapper.py` (`MAP_XX_XX`), a `PERIOD_SHEET_MAP` entry, a `detect_period` branch, a `get_column_map` branch, and a `extract_year_from_period` entry. The example periods `21-22`, `22-23`, `27-28` use the shared `EXAMPLE_LAYOUT`.
 - **New proper noun** - add the uppercase word to `PROPER_NOUNS` in `utils/proper_nouns.py`.
 - **Missing accent fix** - add the word to `ACCENT_FIX` in `utils/proper_nouns.py`.
 - **New faculty alias** - add it to `ALIAS_MAP` in `utils/facultad_matcher.py`.
+- **New date format** - add the pattern to `DATE_FORMATS` or the month/numeric helpers in `utils/data_formatter.py`.
