@@ -1,4 +1,6 @@
 import re
+import json
+import os
 import unicodedata
 from datetime import datetime, date
 from .column_mapper import ColumnMapper
@@ -23,11 +25,105 @@ DATE_FORMATS = (
     "%d-%m-%y",
 )
 
+_CARRERA_SEPARATORS_RE = re.compile(r"\s+-\s+|\s*,\s*|\s+Y\s+")
+
+_LINK_PLANIFICACION_RE = re.compile(r"^https://drive\.google\.com/file/d/[A-Za-z0-9_-]+")
+
 
 class DataFormatter:
 
+    CARRERA_FACULTAD_OVERRIDE = {
+        "DERECHO": "JURISPRUDENCIA, CIENCIAS POLÍTICAS Y SOCIALES",
+        "BIOLOGÍA": "CIENCIAS BIOLÓGICAS",
+        "INGENIERÍA EN RECURSOS NATURALES RENOVABLES": "CIENCIAS BIOLÓGICAS",
+    }
+
+    _carreras_norm = None
+    _carreras_canonical = None
+
     @classmethod
-    def parse_date(cls, value):
+    def _load_carreras(cls):
+        if cls._carreras_norm is not None:
+            return
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "carreras.json",
+        )
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        cls._carreras_norm = {
+            cls._strip_accents(str(name).upper()): str(name).upper()
+            for name in raw
+        }
+        cls._carreras_canonical = set(cls._carreras_norm.values())
+
+    @classmethod
+    def _is_known_career(cls, value):
+        cls._load_carreras()
+        return cls._strip_accents(str(value).upper()) in cls._carreras_norm
+
+    @classmethod
+    def _canonical_career(cls, value):
+        cls._load_carreras()
+        return cls._carreras_norm.get(cls._strip_accents(str(value).upper()))
+
+    @classmethod
+    def _find_career_chain(cls, text):
+        cls._load_carreras()
+        norm_text = cls._strip_accents(text.upper())
+        matches = []
+        for canon in cls._carreras_canonical:
+            norm_career = cls._strip_accents(canon)
+            start = 0
+            while True:
+                idx = norm_text.find(norm_career, start)
+                if idx == -1:
+                    break
+                matches.append((idx, idx + len(norm_career), canon))
+                start = idx + 1
+        if not matches:
+            return None
+        matches.sort()
+        best = None
+        for m in matches:
+            chain = [m]
+            end = m[1]
+            for nxt in matches:
+                if nxt[0] < end:
+                    continue
+                gap = norm_text[end:nxt[0]]
+                if gap and not re.fullmatch(r"\s*Y\s*|\s*-\s*|[\s,/-]*", gap):
+                    break
+                chain.append(nxt)
+                end = nxt[1]
+            if len(chain) >= 2 and chain[0][0] == 0 and end == len(norm_text):
+                if best is None or len(chain) > len(best):
+                    best = chain
+        if best is None:
+            return None
+        return [m[2] for m in best]
+
+    @classmethod
+    def split_careers(cls, value):
+        if not value:
+            return value
+        s = str(value).strip().upper()
+        s = " ".join(s.split())
+        canonical = cls._canonical_career(s)
+        if canonical:
+            return canonical
+        s = cls.normalize_separators(s)
+        s = " ".join(s.split())
+        canonical = cls._canonical_career(s)
+        if canonical:
+            return canonical
+        chain = cls._find_career_chain(s)
+        if chain:
+            return ", ".join(chain)
+        return s
+
+    @classmethod
+    def parse_date(cls, value, preserve_text=False):
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -38,9 +134,23 @@ class DataFormatter:
         if not s or s.lower() == "none":
             return None
         dt = cls._try_parse_date(s)
-        if dt is None:
-            return None
-        return dt.strftime("%d/%m/%Y")
+        if dt is not None:
+            return dt.strftime("%d/%m/%Y")
+        if preserve_text and cls._is_month_year_text(s):
+            return s
+        return None
+
+    @classmethod
+    def _is_month_year_text(cls, text):
+        lowered = cls._strip_accents(text.lower())
+        for name in SPANISH_MONTHS:
+            if re.search(r"\b" + name + r"\b", lowered):
+                has_year = any(
+                    num > 31 or (len(str(num)) == 4 and 1900 <= num <= 2100)
+                    for num in (int(m.group()) for m in re.finditer(r"\d+", text))
+                )
+                return has_year
+        return False
 
     @staticmethod
     def _strip_accents(text):
@@ -244,6 +354,7 @@ class DataFormatter:
 
         if out.get("Carrera"):
             out["Carrera"] = out["Carrera"].strip().upper() if isinstance(out["Carrera"], str) else str(out["Carrera"]).strip().upper()
+            out["Carrera"] = cls.split_careers(out["Carrera"])
 
         if out.get("TipoProyecto"):
             val = str(out["TipoProyecto"]).strip().upper()
@@ -264,13 +375,18 @@ class DataFormatter:
         if out.get("Territorio"):
             out["Territorio"] = cls.title_case(cls.normalize_separators(out["Territorio"]))
 
-        out["FechaInicio"] = cls.parse_date(out.get("FechaInicio"))
-        out["FechaFin"] = cls.parse_date(out.get("FechaFin"))
+        out["FechaInicio"] = cls.parse_date(out.get("FechaInicio"), preserve_text=True)
+        out["FechaFin"] = cls.parse_date(out.get("FechaFin"), preserve_text=True)
         out["Anio"] = ColumnMapper.extract_year_from_period(period)
 
         for link_field in ["LinkLevantamientoBase", "LinkJuridico", "LinkConvenio",
-                           "LinkAprobacion", "LinkPlanificacion", "LinkCronogramaActividades"]:
+                           "LinkAprobacion", "LinkCronogramaActividades"]:
             out[link_field] = "N/A"
+
+        lp = out.get("LinkPlanificacion")
+        if lp:
+            lp = lp.strip() if isinstance(lp, str) else str(lp).strip()
+        out["LinkPlanificacion"] = lp if _LINK_PLANIFICACION_RE.match(lp or "") else "N/A"
 
         program_info_found = False
         if not out.get("NombrePrograma") and out.get("idCodigo"):
@@ -290,6 +406,10 @@ class DataFormatter:
         for field in required_fields:
             if not out.get(field):
                 missing.append(field)
+        for date_field in ["FechaInicio", "FechaFin"]:
+            val = out.get(date_field)
+            if val and not re.match(r"^\d{2}/\d{2}/\d{4}$", val):
+                missing.append(date_field)
 
         out["_missing"] = missing
         out["_program_info_found"] = program_info_found

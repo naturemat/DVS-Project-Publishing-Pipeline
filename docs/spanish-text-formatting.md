@@ -192,6 +192,8 @@ The key is the word WITHOUT tilde in uppercase; the value is the WITH tilde in u
 
 ## Where the rest of the fields are formatted
 
-- `Facultad`, `Carrera`, `TipoProyecto`, `idCodigo` - forced to UPPERCASE (see `utils/data_formatter.py`).
+- `Facultad`, `TipoProyecto`, `idCodigo` - forced to UPPERCASE (see `utils/data_formatter.py`).
+- `Carrera` - UPPERCASE, then normalized through `split_careers` (canonical accents from `carreras.json`, combined singles kept whole, multi-career lists split and joined with `, `). See [`career-normalization.md`](career-normalization.md).
 - `NombrePrograma`, `NombreCoordinador`, `Territorio` - use `DataFormatter.title_case` (first letter of every word uppercase, accents restored, minor words lowercase).
-- Dates - normalized to `DD/MM/YYYY` by `parse_date`.
+- Dates - normalized to `DD/MM/YYYY` by `parse_date`. Month+year-only values are kept as their original text (see README).
+- `LinkPlanificacion` - validated against the Google Drive file-link format `https://drive.google.com/file/d/<id>...`. Matches are kept as the original URL and rendered as a clickable hyperlink (blue `0563C1`, Aptos Narrow 10 pt, single underline). All other values — blank, filename text (`PROYECTO.pdf`), `FALTA`, folder links (`/drive/folders/...`), or any non-URL text — are written as `N/A`. This field is **never flagged as missing**; every row contains either a URL or `N/A`, never blank. All other `Link*` fields are forced to `N/A`.
