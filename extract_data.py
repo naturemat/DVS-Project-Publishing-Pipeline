@@ -27,6 +27,7 @@ THIN_BORDER = Border(
 )
 HEADER_FONT = Font(name="Aptos Narrow", size=10, bold=True)
 DATA_FONT = Font(name="Aptos Narrow", size=10)
+HYPERLINK_FONT = Font(name="Aptos Narrow", size=10, color="0563C1", underline="single")
 HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 DATA_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -158,6 +159,14 @@ def write_to_output(processed, sheet_name):
 
     apply_sheet_format(wb, ws, len(ColumnMapper.OUTPUT_COLUMNS), len(sorted_processed))
 
+    link_planif_col = ColumnMapper.OUTPUT_COLUMNS.index("LinkPlanificacion") + 1
+    for r in range(2, len(sorted_processed) + 2):
+        cell = ws.cell(r, link_planif_col)
+        url = cell.value
+        if url and str(url).startswith("http"):
+            cell.hyperlink = str(url)
+            cell.font = HYPERLINK_FONT
+
     wb.save(OUTPUT_FILE)
     wb.close()
     return True
@@ -252,6 +261,12 @@ def main():
             normalized = facultad_matcher.normalize(out["Facultad"])
             if normalized:
                 out["Facultad"] = normalized
+
+        override = DataFormatter.CARRERA_FACULTAD_OVERRIDE.get(out.get("Carrera"))
+        if override:
+            out["Facultad"] = override
+            if "Facultad" in out.get("_missing", []):
+                out["_missing"].remove("Facultad")
 
         out["_source_row"] = raw_row.get("_row_idx")
         out["idCodigo"] = out.get("idCodigo")

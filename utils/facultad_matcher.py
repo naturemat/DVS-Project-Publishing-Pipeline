@@ -43,6 +43,8 @@ class FacultadMatcher:
         "VETERINARIA": "MEDICINA VETERINARIA Y ZOOTECNIA",
         "ZOOTECNIA": "MEDICINA VETERINARIA Y ZOOTECNIA",
         "ODONTOLOGIA": "ODONTOLOGÍA",
+        "FIGEMPA": "INGENIERÍA EN GEOLOGÍA, MINAS PETRÓLEOS Y AMBIENTAL",
+        "FACSO": "COMUNICACIÓN SOCIAL",
     }
 
     def __init__(self, json_path=None):
