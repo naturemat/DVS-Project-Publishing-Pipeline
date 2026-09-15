@@ -77,12 +77,15 @@ Then the main menu asks:
 ### Option 2 - Compare dates with documents
 
 1. Run `python extract_data.py` and choose option 2 (after generating the output with option 1).
-2. For every row with an `idCodigo`, the tool searches the `Planificaciones/` folder for the document of that project. Place the planification PDFs there manually (they are never downloaded by the program); a file named with the Drive file id of its `LinkPlanificacion` URL (`Planificaciones/<file_id>.pdf`) is matched to the row that holds that URL.
-3. If no `<file_id>.pdf` matches the URL, the tool scans the folder and matches a PDF by the project code printed inside it (e.g. `P1MED05`).
-4. The tool reads the `1.4 TIEMPOS DEL PROYECTO` section (pages 2-3) and extracts `Fecha de inicio` / `Fecha de finalización`.
-5. Each extracted date is compared with the `FechaInicio` / `FechaFin` columns of the output workbook. On a mismatch, the Excel date is **replaced by the document date** and the row is marked **orange**.
-6. If the document can't be found/read or no dates are extracted, the row is left untouched.
-7. A report of all corrections is written to `output/date_comparison_report.md`.
+2. You will be asked **which period to compare** when the workbook holds several periods (e.g. `2025-2025`, `2025-2026`). Pick one period at a time, compare all at once, or go back with `0`. If only one period exists, it is compared directly without asking.
+3. Rows whose `LinkPlanificacion` is not a valid Drive URL (`N/A`, blank) are skipped entirely - never changed, never colored.
+4. For every row with a valid link, the tool searches `Planificaciones/` for the document. Place the planification PDFs there manually (they are never downloaded by the program); a file named with the Drive file id of its `LinkPlanificacion` URL (`Planificaciones/<file_id>.pdf`) is matched to the row that holds that URL.
+5. If no `<file_id>.pdf` matches the URL, the tool scans the folder and matches a PDF by the project code printed inside it (e.g. `P1MED05`).
+6. The tool reads the project code from `Código del Proyecto:` in the `1.2 INFORMACIÓN DEL PROYECTO` section. If the document has no code (or it isn't in `P1MED05` format), the row is skipped entirely. On a mismatch with the Excel `idCodigo`, the code cell is overwritten with the document's code and the row is marked **orange**.
+7. The tool reads the `1.4 TIEMPOS DEL PROYECTO` section (pages 2-3) and extracts `Fecha de inicio` / `Fecha de finalización`.
+8. Each extracted date is compared with the `FechaInicio` / `FechaFin` columns of the output workbook. On a mismatch with a **full** document date, the Excel date is **replaced by the document date** and the row is marked **orange**. Partial document dates (`Abril 2026`) never overwrite - the Excel value is kept with no color. Any fix (code or dates) marks the row orange.
+9. If the document can't be found/read or no dates are extracted, the row is left untouched.
+10. A report of all corrections is written to `output/date_comparison_report.md`.
 
 ## How It Works
 
@@ -263,8 +266,10 @@ Module 2 (menu option 2) cross-checks the dates stored in the output workbook ag
 
 ### How the document is located
 
+Only rows whose `LinkPlanificacion` holds a valid Drive URL are inspected. Rows whose link is `N/A` (or empty) are skipped completely - they are never matched against `Planificaciones/`, never changed, and never colored.
+
 1. The row's `LinkPlanificacion` URL is parsed. If a file named `Planificaciones/<file_id>.pdf` (the Drive file id from that URL) exists, it is used.
-2. If the URL is `N/A` or no `<file_id>.pdf` was found, `Planificaciones/` is scanned and PDFs are matched to rows by the project code extracted from the document itself (regex like `P1MED05`, `P3AGR01` found on page 1 under "Código del Proyecto").
+2. If the row has a valid URL but no `<file_id>.pdf` was found, `Planificaciones/` is scanned (only on demand) and PDFs are matched to the row by the project code extracted from the document itself (regex like `P1MED05`, `P3AGR01` found on page 1 under "Código del Proyecto").
 
 > **The program never downloads anything.** The user places the planification PDFs in `Planificaciones/` manually (named by Drive file id, by project code, or in any shape - they only have to contain the planification text).
 
@@ -278,8 +283,12 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 
 ### Comparison rules
 
+- The project code is verified as well. `Código del Proyecto:` inside the `1.2 INFORMACIÓN DEL PROYECTO` section (page 1) is read from the document. If the document has **no code** or it doesn't match the `P\d{1,2}[A-Z]+\d+` format (e.g. `P1MED05`), the row is **skipped entirely** - no date comparison, no changes, no color.
+- Otherwise the PDF code is compared with the Excel `idCodigo` (the last column). On a **mismatch** the Excel code is **overwritten** with the document's code and the row is marked **orange**; date comparison then continues on the same row.
 - Both dates are normalized before comparing: full dates become `DD/MM/YYYY`; month+year-only values (`Abril 2025`) are compared by the underlying month+year, so `marzo de 2025` and `01/03/2025` do NOT count as equal (different information), while `Abril 2025` and `abril 2025` do.
-- On a mismatch the Excel cell is **overwritten** with the document's date (full dates as `DD/MM/YYYY`, month+year kept as the original document text) and the row is marked **orange** (red rows keep their red marking).
+- On a mismatch with a **full** document date (`DD/MM/YYYY`), the Excel cell is **overwritten** with the document's date and the row is marked **orange** (red rows keep their red marking). Any correction - code or date - marks the row orange.
+- **Incomplete document dates are never applied.** A date without a day (month+year only, e.g. `Abril 2026`, or year only) found in the PDF never overwrites the Excel column: the cell keeps its current value and no color is applied. Only full dates (`DD/MM/YYYY`) from the document can correct a row.
+- **Rows without a link are never touched.** If `LinkPlanificacion` is not a valid Drive URL (`N/A`, blank, etc.), the row is skipped - no document lookup, no changes, no orange marking.
 - Rows whose document cannot be found or whose dates cannot be parsed are left unchanged. Hyperlinks and formatting survive the update.
 - A summary of every correction is written to `output/date_comparison_report.md`.
 
