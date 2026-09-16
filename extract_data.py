@@ -208,7 +208,7 @@ def generate_report(missing_report, filename, sheet_name):
     print(f"  Report saved: {report_path}")
 
 
-def main():
+def run_pipeline():
     extractor = FileExtractor(BASE_DIR)
     files = extractor.list_files()
 
@@ -312,6 +312,32 @@ def main():
     print(f"  Missing data rows: {len(missing_report)} (marked RED)")
     print(f"  Programas.json lookups: {rows_with_program_lookup} (marked ORANGE)")
     print("=" * 60)
+
+
+def main():
+    from modules.date_comparison import comparator
+
+    while True:
+        print("\n" + "=" * 60)
+        print("  EXCEL TO DTICS - DATA PROCESSING")
+        print("=" * 60)
+        print("\n  [1] Process data (extract Excel -> output workbook)")
+        print("  [2] Compare dates with documents (PDF)")
+        print("  [0] Exit\n")
+        try:
+            choice = int(input("  Select an option: ").strip())
+        except (ValueError, KeyboardInterrupt):
+            print("  Enter a valid number.")
+            continue
+        if choice == 1:
+            run_pipeline()
+        elif choice == 2:
+            comparator.run()
+        elif choice == 0:
+            print("\n  Goodbye!")
+            break
+        else:
+            print("  Invalid option.")
 
 
 if __name__ == "__main__":
