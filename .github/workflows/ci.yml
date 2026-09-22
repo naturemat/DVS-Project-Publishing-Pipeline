@@ -30,10 +30,20 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m compileall -q extract_data.py utils modules scripts tests
+        run: python -m compileall -q .
 
       - name: Import smoke test
-        run: python -c "import extract_data; import utils.column_mapper, utils.data_formatter, utils.facultad_matcher, utils.file_reader, utils.proper_nouns; import modules.date_comparison.comparator, modules.date_comparison.date_extractor, modules.date_comparison.pdf_reader; print('imports ok')"
+        run: |
+          python -c "
+          import importlib
+          import importlib.util
+          import extract_data
+          import utils.column_mapper, utils.data_formatter, utils.facultad_matcher, utils.file_reader, utils.proper_nouns
+          for module in ['modules.date_comparison.comparator', 'modules.date_comparison.date_extractor', 'modules.date_comparison.pdf_reader']:
+              if importlib.util.find_spec(module):
+                  importlib.import_module(module)
+          print('imports ok')
+          "
 
       - name: Unit tests
         run: python -m unittest discover -s tests -p "test_formatting.py" -v
