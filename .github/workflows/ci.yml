@@ -38,10 +38,23 @@ jobs:
           import importlib
           import importlib.util
           import extract_data
-          import utils.column_mapper, utils.data_formatter, utils.facultad_matcher, utils.file_reader, utils.proper_nouns
-          for module in ['modules.date_comparison.comparator', 'modules.date_comparison.date_extractor', 'modules.date_comparison.pdf_reader']:
-              if importlib.util.find_spec(module):
-                  importlib.import_module(module)
+          import utils.column_mapper
+          import utils.data_formatter
+          import utils.facultad_matcher
+          import utils.file_reader
+          import utils.proper_nouns
+          optional_modules = [
+              'modules.date_comparison.comparator',
+              'modules.date_comparison.date_extractor',
+              'modules.date_comparison.pdf_reader',
+          ]
+          for module_name in optional_modules:
+              try:
+                  spec = importlib.util.find_spec(module_name)
+              except (ImportError, ModuleNotFoundError):
+                  spec = None
+              if spec is not None:
+                  importlib.import_module(module_name)
           print('imports ok')
           "
 
