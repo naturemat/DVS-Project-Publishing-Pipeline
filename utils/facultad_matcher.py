@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 
 class FacultadMatcher:
@@ -65,6 +66,7 @@ class FacultadMatcher:
             return None
         cleaned = raw_facultad.strip().upper()
         cleaned = " ".join(cleaned.split())
+        cleaned = re.sub(r"^\W+|\W+$", "", cleaned)
 
         if cleaned in self.ALIAS_MAP:
             return self.ALIAS_MAP[cleaned]

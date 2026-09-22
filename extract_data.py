@@ -149,11 +149,12 @@ def write_to_output(processed, sheet_name):
 
         has_missing = len(row_data.get("_missing", [])) > 0
         program_found = row_data.get("_program_info_found", False)
+        date_autocompleted = row_data.get("_date_autocompleted", False)
 
         if has_missing:
             for col_idx in range(1, len(ColumnMapper.OUTPUT_COLUMNS) + 1):
                 ws.cell(r, col_idx).fill = RED_FILL
-        elif program_found:
+        elif program_found or date_autocompleted:
             for col_idx in range(1, len(ColumnMapper.OUTPUT_COLUMNS) + 1):
                 ws.cell(r, col_idx).fill = ORANGE_FILL
 
@@ -262,14 +263,13 @@ def run_pipeline():
             if normalized:
                 out["Facultad"] = normalized
 
-        override = DataFormatter.CARRERA_FACULTAD_OVERRIDE.get(out.get("Carrera"))
+        override = DataFormatter.carrera_facultad(out.get("Carrera"))
         if override:
             out["Facultad"] = override
             if "Facultad" in out.get("_missing", []):
                 out["_missing"].remove("Facultad")
 
         out["_source_row"] = raw_row.get("_row_idx")
-        out["idCodigo"] = out.get("idCodigo")
 
         if out["_missing"]:
             missing_report.append({
@@ -287,6 +287,10 @@ def run_pipeline():
     rows_with_program_lookup = sum(1 for p in processed if p.get("_program_info_found"))
     if rows_with_program_lookup:
         print(f"  Rows enriched from Programas.json: {rows_with_program_lookup}")
+
+    rows_with_auto_dates = sum(1 for p in processed if p.get("_date_autocompleted"))
+    if rows_with_auto_dates:
+        print(f"  Rows with autocompleted dates: {rows_with_auto_dates}")
 
     print(f"  Writing to sheet '{sheet_name}'...")
     success = write_to_output(processed, sheet_name)
@@ -311,6 +315,7 @@ def run_pipeline():
     print(f"  Complete rows: {len(processed) - len(missing_report)}")
     print(f"  Missing data rows: {len(missing_report)} (marked RED)")
     print(f"  Programas.json lookups: {rows_with_program_lookup} (marked ORANGE)")
+    print(f"  Autocompleted dates: {rows_with_auto_dates} (first day of month, marked ORANGE)")
     print("=" * 60)
 
 
