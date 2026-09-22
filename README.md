@@ -30,6 +30,15 @@ Excel_to_dtics/
 │   ├── EJEMPLO PERIODO 21-22.xlsx   # Example with invented data (committed)
 │   ├── EJEMPLO PERIODO 22-23.xlsx   # Example with invented data (committed)
 │   └── EJEMPLO PERIODO 27-28.xlsx   # Example with invented data (committed)
+├── scripts/
+│   └── semver.py            # Next semantic version from conventional commits
+├── tests/
+│   ├── test_formatting.py   # Unit tests (dates, careers, faculties, fields)
+│   └── test_integration.py  # End-to-end pipeline on example workbooks
+├── .github/
+│   └── workflows/
+│       ├── ci.yml           # Validation + integration (dev/production environments)
+│       └── release.yml      # Semver tagging on main
 ├── Planificaciones/         # Manually placed planning PDFs (gitignored)
 │   └── .gitkeep
 └── output/                  # Generated output (gitignored)
@@ -316,6 +325,50 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 | `carrera_facultad.json` | Career -> faculty overrides (applied unconditionally after the matcher) |
 | `carreras.json` | Known career names: canonical spelling plus combined single careers (used for canonical naming and safe splitting) |
 | `utils/proper_nouns.py` | Spanish proper nouns, acronyms, minor words, accent fixes |
+
+## CI/CD
+
+GitHub Actions validates every change and releases `main` with semantic version tags.
+
+### Branch strategy and environments
+
+Two long-lived branches, each mapped to a GitHub Actions **environment**:
+
+| Branch | Environment | Purpose |
+|--------|-------------|---------|
+| `dev` | `dev` | Integration branch. PRs from feature branches target `dev`; pushes to `dev` run the CI pipeline against the `dev` environment. |
+| `main` | `production` | Release branch. After `dev` is validated, `main` is updated and the **release workflow** tags it with the next semantic version. Merges to `main` run CI against the `production` environment. |
+
+Feature branches are deleted automatically after their merge by enabling the GitHub repository setting **Settings > General > Automatically delete head branches**.
+
+### Workflows
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| `ci.yml` | PR opened/updated to `main` or `dev`; push to `main` or `dev` | 1. **Validation**: syntax check (`compileall`), import smoke test, unit tests (`tests/test_formatting.py`). 2. **Integration**: runs `tests/test_integration.py`, which formats every `EJEMPLO PERIODO *.xlsx` and writes a real period sheet into `output/`, using the base BD workbook (created on demand in CI). |
+| `release.yml` | push to `main` | Computes the next version with `scripts/semver.py` and creates + pushes an annotated `vX.Y.Z` tag. Requires the `production` environment. |
+
+### Semver rules
+
+`scripts/semver.py` derives the next `vX.Y.Z` from **conventional commits** between the last `v*` tag and `HEAD`:
+
+| Change | Bump |
+|--------|------|
+| Breaking change (`!` in the type or `BREAKING CHANGE:` in the message) | Major (`X+1.0.0`) |
+| `feat(...)` | Minor (`Y+1.0`) |
+| Everything else (`fix`, `docs`, `ci`, etc.) | Patch (`Z+1`) |
+
+Merge-commit subjects are ignored. With no previous tag, the version starts at `v0.1.0` and keeps bumping from there.
+
+### Local test commands
+
+```bash
+venv\Scripts\python.exe -m unittest discover -s tests -p "test_formatting.py" -v
+venv\Scripts\python.exe -m unittest discover -s tests -p "test_integration.py" -v
+venv\Scripts\python.exe scripts\semver.py
+```
+
+> The integration tests write to `output/BDVinculacionn.xlsx`; close the file in Excel before running (`Stop-Process -Name EXCEL -Force` if it is locked).
 
 ## Extending
 
