@@ -155,22 +155,11 @@ Output: un número limitado de habitantes
 
 ## Separators (multiple locations)
 
-Fields such as `Territorio` and `NombreProyecto` often list several locations separated by `/`. The engine calls `normalize_separators` BEFORE applying case rules, so:
+`NombreProyecto` uses `normalize_separators`: `/` is replaced by `, `, while `y/o` and date-like patterns are protected.
 
-```
-Input : QUITO / GUARANDA / ECHEANDÍA / CHIMBO / CHILLANES
-Step 1: QUITO, GUARANDA, ECHEANDÍA, CHIMBO, CHILLANES
-Output: Quito, Guaranda, Echeandía, Chimbo, Chillanes
-```
+`Territorio` uses the wider `normalize_territorio_separators`: in addition to `/`, the conjunctions `y`, `&`, and the dash `-` are all replaced by `, `, so entries like `Angamarca - Cotopaxi` and `PUJILÍ Y SANTA CLARA` become `Angamarca, Cotopaxi` and `Pujilí, Santa Clara` respectively. Date-like dash patterns (`20-05-2025`) are protected. The idiom `y/o` is still preserved.
 
-Rules of `normalize_separators`:
-
-- Any `/` between parts is replaced by `, ` (comma + space).
-- Multiple commas are collapsed; trailing commas are removed; double spaces are removed.
-- The conjunction `y/o` ("and/or") is protected and never split.
-- Numeric date-like patterns such as `20/05/2025` are protected and kept as-is.
-
-This ordering matters: normalizing before `title_case`/`proyecto_case` prevents a glued token like `DMQ/PUERTO QUITO` from being treated as a single (wrongly cased) word.
+In both cases the separator normalization runs BEFORE applying case rules, so a glued token like `DMQ/PUERTO QUITO` is split into separate words before title-casing.
 
 ## How to add a proper noun
 
@@ -192,8 +181,8 @@ The key is the word WITHOUT tilde in uppercase; the value is the WITH tilde in u
 
 ## Where the rest of the fields are formatted
 
-- `Facultad`, `TipoProyecto`, `idCodigo` - forced to UPPERCASE (see `utils/data_formatter.py`).
-- `Carrera` - UPPERCASE, then normalized through `split_careers` (canonical accents from `carreras.json`, combined singles kept whole, multi-career lists split and joined with `, `). See [`career-normalization.md`](career-normalization.md).
+- `Facultad`, `TipoProyecto`, `idCodigo` - forced to UPPERCASE (see `utils/data_formatter.py`). `TipoProyecto` additionally drops a leading `PROYECTO ` so `PROYECTO VIGENTE` becomes `VIGENTE` (values are `VIGENTE`, `NUEVO`).
+- `Carrera` - UPPERCASE, then normalized through `split_careers` (canonical accents from `carreras.json`, combined singles kept whole, multi-career lists split and joined with a bullet `•` prefixing each career, e.g. `•ECONOMÍA •ESTADÍSTICA`). See [`career-normalization.md`](career-normalization.md).
 - `NombrePrograma`, `NombreCoordinador`, `Territorio` - use `DataFormatter.title_case` (first letter of every word uppercase, accents restored, minor words lowercase).
-- Dates - normalized to `DD/MM/YYYY` by `parse_date`. Month+year-only values are kept as their original text (see README).
+- Dates - normalized to `DD/MM/YYYY` by `parse_date`. Month+year-only values (e.g. `Septiembre del 2025`) are autocompleted with the first day of the month (`01/09/2025`) and the row is marked orange (see README).
 - `LinkPlanificacion` - validated against the Google Drive file-link format `https://drive.google.com/file/d/<id>...`. Matches are kept as the original URL and rendered as a clickable hyperlink (blue `0563C1`, Aptos Narrow 10 pt, single underline). All other values — blank, filename text (`PROYECTO.pdf`), `FALTA`, folder links (`/drive/folders/...`), or any non-URL text — are written as `N/A`. This field is **never flagged as missing**; every row contains either a URL or `N/A`, never blank. All other `Link*` fields are forced to `N/A`.

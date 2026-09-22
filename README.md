@@ -19,9 +19,7 @@ Excel_to_dtics/
 │   ├── facultad_matcher.py  # Faculty normalization (facultades.json + aliases)
 │   └── proper_nouns.py      # Proper nouns, acronyms, accent fixes (Spanish)
 ├── modules/
-│   ├── __init__.py
 │   └── date_comparison/     # Module 2: PDF date extraction + comparison vs Excel dates
-│       ├── __init__.py
 │       ├── pdf_reader.py    # Match URLs to local Planificaciones/<file_id>.pdf; scan by project code
 │       ├── date_extractor.py # TIEMPOS DEL PROYECTO section → FechaInicio/FechaFin
 │       └── comparator.py    # Compare + overwrite dates + mark rows orange
@@ -29,7 +27,6 @@ Excel_to_dtics/
 │   ├── spanish-text-formatting.md   # Detailed rules of the text engine
 │   └── career-normalization.md      # Career splitting + canonical naming rules
 ├── Fuente_Datos/            # Source Excel files (real ones gitignored)
-│   ├── .gitkeep
 │   ├── EJEMPLO PERIODO 21-22.xlsx   # Example with invented data (committed)
 │   ├── EJEMPLO PERIODO 22-23.xlsx   # Example with invented data (committed)
 │   └── EJEMPLO PERIODO 27-28.xlsx   # Example with invented data (committed)
@@ -79,13 +76,14 @@ Then the main menu asks:
 1. Run `python extract_data.py` and choose option 2 (after generating the output with option 1).
 2. You will be asked **which period to compare** when the workbook holds several periods (e.g. `2025-2025`, `2025-2026`). Pick one period at a time, compare all at once, or go back with `0`. If only one period exists, it is compared directly without asking.
 3. Rows whose `LinkPlanificacion` is not a valid Drive URL (`N/A`, blank) are skipped entirely - never changed, never colored.
-4. For every row with a valid link, the tool searches `Planificaciones/` for the document. Place the planification PDFs there manually (they are never downloaded by the program); a file named with the Drive file id of its `LinkPlanificacion` URL (`Planificaciones/<file_id>.pdf`) is matched to the row that holds that URL.
+4. For every row with a valid link, the tool searches `Planificaciones/` for the document. A file named with the Drive file id of its `LinkPlanificacion` URL (`Planificaciones/<file_id>.pdf`) is matched to the row that holds that URL.
 5. If no `<file_id>.pdf` matches the URL, the tool scans the folder and matches a PDF by the project code printed inside it (e.g. `P1MED05`).
-6. The tool reads the project code from `Código del Proyecto:` in the `1.2 INFORMACIÓN DEL PROYECTO` section. If the document has no code (or it isn't in `P1MED05` format), the row is skipped entirely. On a mismatch with the Excel `idCodigo`, the code cell is overwritten with the document's code and the row is marked **orange**.
-7. The tool reads the `1.4 TIEMPOS DEL PROYECTO` section (pages 2-3) and extracts `Fecha de inicio` / `Fecha de finalización`.
-8. Each extracted date is compared with the `FechaInicio` / `FechaFin` columns of the output workbook. On a mismatch with a **full** document date, the Excel date is **replaced by the document date** and the row is marked **orange**. Partial document dates (`Abril 2026`) never overwrite - the Excel value is kept with no color. Any fix (code or dates) marks the row orange.
-9. If the document can't be found/read or no dates are extracted, the row is left untouched.
-10. A report of all corrections is written to `output/date_comparison_report.md`.
+6. If still no document is found and the project is marked **`NUEVO`** in `TipoProyecto`, the tool **downloads** the planification from the Google Drive link into `Planificaciones/<file_id>.pdf` and compares against it. Exception: if a local file for that id already exists and is flagged invalid (`NO VALIDO`), the download is skipped and the flagged file is never overwritten. All non-`NUEVO` projects are never downloaded - you must place their PDFs manually.
+7. The tool reads the project code from `Código del Proyecto:` in the `1.2 INFORMACIÓN DEL PROYECTO` section. If the document has no code (or it isn't in `P1MED05` format), the row is skipped entirely. On a mismatch with the Excel `idCodigo`, the code cell is overwritten with the document's code and the row is marked **orange**.
+8. The tool reads the `1.4 TIEMPOS DEL PROYECTO` section (pages 2-3) and extracts `Fecha de inicio` / `Fecha de finalización`.
+9. Each extracted date is compared with the `FechaInicio` / `FechaFin` columns of the output workbook. On a mismatch with a **full** document date, the Excel date is **replaced by the document date** and the row is marked **orange**. Partial document dates (`Abril 2026`) never overwrite - the Excel value is kept with no color. Any fix (code or dates) marks the row orange.
+10. If the document can't be found/read or no dates are extracted, the row is left untouched. Rows still missing a document are listed per sheet on the console and in the report (`output/date_comparison_report.md`) so you know which PDFs to place.
+11. A report of all corrections is written to `output/date_comparison_report.md`.
 
 ## How It Works
 
@@ -93,8 +91,8 @@ The pipeline runs in five stages:
 
 1. **Read** - `FileExtractor` opens the selected file from `Fuente_Datos/` and reads all data rows.
 2. **Map** - `ColumnMapper` detects the period from the filename (`25-25`, `25-26`, `26-26`) and selects the correct source column positions for that file layout.
-3. **Format** - `DataFormatter` normalizes every field: dates to `DD/MM/YYYY` (or kept as text when only month+year is given), uppercase fields, sentence case, proper nouns, tildes, plus career canonical naming and multi-career splitting.
-4. **Enrich** - `FacultadMatcher` matches the source faculty to the official names in `facultades.json`. If `NombrePrograma`/`NombreCoordinador` are missing, `Programas.json` is queried using the program number extracted from `idCodigo` (e.g., `P3AGR18` -> `P3`). If the career maps to a definitive faculty (see `CARRERA_FACULTAD_OVERRIDE`), the faculty is set from the career.
+3. **Format** - `DataFormatter` normalizes every field: dates to `DD/MM/YYYY` (month+year-only values are completed with the first day of the month), uppercase fields, sentence case, proper nouns, tildes, plus career canonical naming and multi-career splitting.
+4. **Enrich** - `FacultadMatcher` matches the source faculty to the official names in `facultades.json`. If `NombrePrograma`/`NombreCoordinador` are missing, `Programas.json` is queried using the program number extracted from `idCodigo` (e.g., `P3AGR18` -> `P3`). If the career maps to a definitive faculty (see `carrera_facultad.json`), the faculty is set from the career.
 5. **Write** - `write_to_output` writes into the existing period sheet (or creates it only if absent), sorts rows by `Facultad` then `NombreProyecto`, applies the base sheet formatting, colors rows, filters, and saves.
 
 ### Example files
@@ -113,14 +111,14 @@ The pipeline runs in five stages:
 | `12 Septiembre 2026`, `01 de febrero de 2025`, `1 de ABRIL DEL 2027` | `12/09/2026`, `01/02/2025`, `01/04/2027` |
 | `Octubre 1/2024`, `Septiembre 30/2026`, `octubre 10,2023` | `01/10/2024`, `30/09/2026`, `10/10/2023` |
 | US order `10/31/2026` (auto-detected when day > 12) | `31/10/2026` |
-| Month + year only, e.g. `marzo de 2025`, `ABRIL DEL 2025` | *(original text kept, row marked RED)* |
+| Month + year only, e.g. `marzo de 2025`, `ABRIL DEL 2025`, `Septiembre del 2025` | `01/03/2025`, `01/04/2025`, `01/09/2025` (first day of month, row marked ORANGE) |
 | `FALTA`, `NO EXISTE`, `FECHA QUE INICIO EL PROYECTO`, `periodo 24-25` | *(blank)* |
 | Invalid dates such as `31/02/2026` | *(blank)* |
 
 Rules:
 
 - A **complete** calendar date (day + month + year) becomes `DD/MM/YYYY`.
-- A **partial** date with a month and a year but no day (`marzo de 2025`, `Septiembre del 2025`) is kept **as the original text** in the cell so the information is not lost, and the row is marked **red** because the exact date is still missing.
+- A **partial** date with a month and a year but no day (`marzo de 2025`, `Septiembre del 2025`) is **completed with the first day of the month** (`01/09/2025`), and the row is marked **orange** so it can be reviewed later. The month and year are never lost.
 - Unparseable text (`periodo 24-25`, `FALTA`, etc.) leaves the cell **empty**; the row is marked red as missing that date.
 
 ### Link fields
@@ -134,22 +132,24 @@ Most link fields are always written as `N/A`. They are never searched, never val
 
 When a field lists multiple locations separated by `/` (e.g., `Quito / Guaranda / Echeandía`), the slashes are replaced by commas so every location is listed separately: `Quito, Guaranda, Echeandía`. This applies to `Territorio` and `NombreProyecto`. The idiom `y/o` is preserved, and date-like patterns (`20/05/2025`) are never split.
 
+In `Territorio` the separator set is wider: `y`, `&`, `/`, and `-` (dash) are all replaced by `, `; for example `Angamarca - Cotopaxi` becomes `Angamarca, Cotopaxi` and `PUJILÍ Y SANTA CLARA` becomes `Pujilí, Santa Clara`. Date-like dash patterns (e.g. `20-05-2025`) are protected. `NombreProyecto` continues to use only `/`.
+
 ### Career normalization
 
 The `Carrera` field is written in UPPERCASE, but it is first normalized against the reference list in `carreras.json`:
 
 1. **Canonical spelling** - source variants are rewritten to the canonical (accented) form. `AGRONOMIA` -> `AGRONOMÍA`, `BIOQUIMICA Y FARMACIA` -> `BIOQUÍMICA Y FARMACIA`.
 2. **Combined careers that are a single program are kept whole** - `BIOQUÍMICA Y FARMACIA`, `MEDICINA VETERINARIA Y ZOOTECNIA`, `INGENIERÍA EN DISEÑO INDUSTRIAL / DISEÑO INDUSTRIAL`, etc. are stored as single entries.
-3. **Multi-career lists are split and joined with `, `** - when a cell lists several distinguishable careers, each part is canonicalized and joined:
+3. **Multi-career lists are split and joined with `•`** - when a cell lists several distinguishable careers, each part is canonicalized and prefixed with a bullet:
 
    | Input | Output |
    |-------|--------|
-   | `TURISMO - INGENIERÍA AGRONÓMICA` | `TURISMO, INGENIERÍA AGRONÓMICA` |
-   | `ECONOMÍA Y ESTADISTICA` | `ECONOMÍA, ESTADÍSTICA` |
-   | `BIOQUIMICA Y FARMACIA / QUIMICA` | `BIOQUÍMICA Y FARMACIA, QUÍMICA` |
-   | `CONTABILIDAD Y AUDITORIA/\nADMINISTRACIÓN PÚBLICA` | `CONTABILIDAD Y AUDITORÍA, ADMINISTRACIÓN PÚBLICA` |
+   | `TURISMO - INGENIERÍA AGRONÓMICA` | `•TURISMO •INGENIERÍA AGRONÓMICA` |
+   | `ECONOMÍA Y ESTADISTICA` | `•ECONOMÍA •ESTADÍSTICA` |
+   | `BIOQUIMICA Y FARMACIA / QUIMICA` | `•BIOQUÍMICA Y FARMACIA •QUÍMICA` |
+   | `CONTABILIDAD Y AUDITORIA/\nADMINISTRACIÓN PÚBLICA` | `•CONTABILIDAD Y AUDITORÍA •ADMINISTRACIÓN PÚBLICA` |
 
-   Splitting is validation-driven: a separator (` - `, ` / `, `, `, standalone ` Y `) only produces a split when **every part** matches a known career in `carreras.json` and the parts cover the whole string. Anything ambiguous is left as the source text.
+   Splitting is validation-driven: a separator (` - `, ` / `, `, `, standalone ` Y `) only produces a split when **every part** matches a known career in `carreras.json` and the parts cover the whole string. Values that do not decode into known careers keep their normalized source text, bullet-prefixed per part when several parts are present.
 
 > **Full rulebook:** see [`docs/career-normalization.md`](docs/career-normalization.md).
 
@@ -168,8 +168,8 @@ Every generated period sheet replicates the base BD format exactly:
 |-------|--------|---------|
 | idDocumento | Sequential number | 1 |
 | Facultad | UPPERCASE (matched to facultades.json) | CIENCIAS AGRÍCOLAS |
-| Carrera | UPPERCASE, canonical accents; multi-career lists joined with ", " | AGRONOMÍA / TURISMO, INGENIERÍA AGRONÓMICA |
-| TipoProyecto | UPPERCASE | VIGENTE |
+| Carrera | UPPERCASE, canonical accents; multi-career lists "•"-prefixed per career | •TURISMO •INGENIERÍA AGRONÓMICA |
+| TipoProyecto | UPPERCASE, "PROYECTO " prefix removed | VIGENTE, NUEVO |
 | idCodigo | UPPERCASE | P3AGR18 |
 | NombreProyecto | Sentence case (proper nouns preserved) | Primera vivienda ecológica en la parroquia La Esperanza para un número limitado de habitantes |
 | NombrePrograma | Title case | P3. Hábitat, Desarrollo Local |
@@ -240,15 +240,19 @@ If no match is found the source value is kept as-is (and the row is reported as 
 
 ### Career to faculty overrides
 
-Some careers always belong to one specific faculty. When the career matches one of the keys below (`CARRERA_FACULTAD_OVERRIDE` in `utils/data_formatter.py`), the faculty is set unconditionally - this fixes wrong or missing faculties:
+Some careers always belong to one specific faculty. The mapping lives in **`carrera_facultad.json`** (in the repo root - the file you review and edit). When the formatted career matches one of the keys below, the faculty is set unconditionally - this fixes wrong or missing faculties:
 
 | Career | Faculty |
 |--------|---------|
+| `AGRONOMÍA` | `CIENCIAS AGRÍCOLAS` |
+| `INGENIERÍA AGRONÓMICA` | `CIENCIAS AGRÍCOLAS` |
+| `CIENCIAS AGRÍCOLAS` | `CIENCIAS AGRÍCOLAS` |
+| `TURISMO` | `CIENCIAS AGRÍCOLAS` |
 | `DERECHO` | `JURISPRUDENCIA, CIENCIAS POLÍTICAS Y SOCIALES` |
 | `BIOLOGÍA` | `CIENCIAS BIOLÓGICAS` |
 | `INGENIERÍA EN RECURSOS NATURALES RENOVABLES` | `CIENCIAS BIOLÓGICAS` |
 
-This runs after the faculty matcher, so an override always wins.
+Keys are matched accent/case-insensitively, so `AGRONOMIA` or `ingenieria agronomica` still match. This runs after the faculty matcher, so an override always wins. Note also that the faculty matcher strips trailing punctuation (`CIENCIAS AGRICOLAS.` -> `CIENCIAS AGRÍCOLAS`).
 
 ## Programas.json Lookup
 
@@ -270,8 +274,9 @@ Only rows whose `LinkPlanificacion` holds a valid Drive URL are inspected. Rows 
 
 1. The row's `LinkPlanificacion` URL is parsed. If a file named `Planificaciones/<file_id>.pdf` (the Drive file id from that URL) exists, it is used.
 2. If the row has a valid URL but no `<file_id>.pdf` was found, `Planificaciones/` is scanned (only on demand) and PDFs are matched to the row by the project code extracted from the document itself (regex like `P1MED05`, `P3AGR01` found on page 1 under "Código del Proyecto").
+3. If still nothing is found and the project's `TipoProyecto` is **`NUEVO`**, the planification is **downloaded from its Google Drive file link** into `Planificaciones/<file_id>.pdf` and the comparison proceeds. The download uses the Drive `uc?export=download` endpoint (the large-file virus-scan `confirm` token is handled automatically).
 
-> **The program never downloads anything.** The user places the planification PDFs in `Planificaciones/` manually (named by Drive file id, by project code, or in any shape - they only have to contain the planification text).
+> **Downloads:** only projects marked `NUEVO` are ever downloaded, and only when no matching document is already in `Planificaciones/`. A download is skipped when `Planificaciones/<file_id>.pdf` already exists and is flagged invalid (see below) - a `NO VALIDO` file is never overwritten. For **every other project** (`VIGENTE`, `RESTRUCTURADO`, or `N/A`) you must place the planification PDF in `Planificaciones/` manually (named by Drive file id, by project code, or in any shape - they only have to contain the planification text).
 
 > **Performance:** the code scan of `Planificaciones/` runs only when the folder changes. The result is cached in `Planificaciones/.pdf_index.json` (gitignored), so the first run takes a minute or two and every later run starts in under a second. Progress lines are printed while option 2 works (`Indexed N project codes...`, `2025-2025: checked 100 rows...`).
 
@@ -294,8 +299,8 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 
 ## Color Coding
 
-- **Red** - the row is missing one or more required fields (`Facultad`, `Carrera`, `NombreProyecto`, `NombrePrograma`, `NombreCoordinador`, `Territorio`, `FechaInicio`, `FechaFin`, `idCodigo`). Missing URLs never cause a red mark. A month+year date kept as text (`marzo de 2025`) also produces a red mark because the full date is still unknown.
-- **Orange** - the row was completed using the `Programas.json` lookup (module 1) or had its dates corrected from the PDF document (module 2).
+- **Red** - the row is missing one or more required fields (`Facultad`, `Carrera`, `NombreProyecto`, `NombrePrograma`, `NombreCoordinador`, `Territorio`, `FechaInicio`, `FechaFin`, `idCodigo`). Missing URLs never cause a red mark.
+- **Orange** - the row was completed using the `Programas.json` lookup (module 1), had a month+year date autocompleted to `01/<month>/<year>` (module 1), or had its dates corrected from the PDF document (module 2).
 
 ## Reports
 
@@ -308,6 +313,7 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 |------|---------|
 | `Programas.json` | Program codes P1-P9 with official name and coordinator |
 | `facultades.json` | Official list of university faculties |
+| `carrera_facultad.json` | Career -> faculty overrides (applied unconditionally after the matcher) |
 | `carreras.json` | Known career names: canonical spelling plus combined single careers (used for canonical naming and safe splitting) |
 | `utils/proper_nouns.py` | Spanish proper nouns, acronyms, minor words, accent fixes |
 
@@ -318,7 +324,7 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 - **Missing accent fix** - add the word to `ACCENT_FIX` in `utils/proper_nouns.py`.
 - **New faculty alias** - add it to `ALIAS_MAP` in `utils/facultad_matcher.py`.
 - **New career / combined career** - add the canonical name to `carreras.json`. Careers listed there are kept whole and get canonical accents; multi-career lists split only when every part is present in this file.
-- **Career to faculty override** - add the career -> faculty mapping to `CARRERA_FACULTAD_OVERRIDE` in `utils/data_formatter.py`.
+- **Career to faculty override** - add the career -> faculty mapping to `carrera_facultad.json` (repo root). Keys are matched accent/case-insensitively against the formatted career.
 - **New date format** - add the pattern to `DATE_FORMATS` or the month/numeric helpers in `utils/data_formatter.py`.
 - **New date pattern in PDFs** - adjust the regexes in `modules/date_comparison/date_extractor.py` (`_DATE_TOKEN_RE`, `_TIEMPOS_RE`).
 - **New document location** - extend `modules/date_comparison/pdf_reader.py` (`local_pdf_for_url`, `index_local_pdfs`).

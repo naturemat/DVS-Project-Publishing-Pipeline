@@ -90,8 +90,12 @@ def run():
     checked = 0
     corrected = 0
     no_doc = 0
+    no_parse = 0
     no_url = 0
     no_code = 0
+    downloaded = 0
+    skipped_invalid = 0
+    needs_doc = []
     report = []
     dates_cache = {}
     code_cache = {}
@@ -108,10 +112,13 @@ def run():
         inicio_col = headers.get("FechaInicio")
         fin_col = headers.get("FechaFin")
         codigo_col = headers.get("idCodigo")
+        tipo_col = headers.get("TipoProyecto")
+        nombre_col = headers.get("NombreProyecto", 1)
         if not (inicio_col and fin_col and codigo_col):
             continue
 
         per_sheet = 0
+        sheet_missing = []
         for r in range(2, ws.max_row + 1):
             total_rows += 1
             row_cell = ws.cell(r, codigo_col)
@@ -139,7 +146,29 @@ def run():
                     pdf_path = matches[0]
 
             if not pdf_path:
+                tipo_val = ws.cell(r, tipo_col).value if tipo_col else None
+                if str(tipo_val or "").strip().upper() == "NUEVO":
+                    dest = pdf_reader.local_dest_for_url(link_value)
+                    if dest is not None:
+                        if os.path.exists(dest) and pdf_reader.is_invalid_doc(dest):
+                            skipped_invalid += 1
+                            print(f"    {sheet_name} row {r}: '{os.path.basename(dest)}' marked NO VALIDO, download skipped", flush=True)
+                        elif not os.path.exists(dest):
+                            pdf_path = pdf_reader.download_gdrive_pdf(link_value, dest)
+                            if pdf_path:
+                                downloaded += 1
+                                print(f"    {sheet_name} row {r}: downloaded {os.path.basename(dest)}", flush=True)
+
+            if not pdf_path:
                 no_doc += 1
+                missing = {
+                    "sheet": sheet_name,
+                    "row": r,
+                    "codigo": str(row_cell.value or ""),
+                    "nombre": str(ws.cell(r, nombre_col).value or ""),
+                }
+                sheet_missing.append(missing)
+                needs_doc.append(missing)
                 continue
 
             if pdf_path in code_cache:
@@ -165,7 +194,7 @@ def run():
                 doc_dates = extract_project_dates(pdf_path)
                 dates_cache[pdf_path] = doc_dates
             if not doc_dates:
-                no_doc += 1
+                no_parse += 1
                 if changes:
                     corrected += 1
                     per_sheet += 1
@@ -204,11 +233,15 @@ def run():
                 })
 
         print(f"  {sheet_name}: checked {ws.max_row - 1} rows, {per_sheet} corrected", flush=True)
+        if sheet_missing:
+            print(f"    {sheet_name} - documents missing ({len(sheet_missing)}):", flush=True)
+            for item in sheet_missing:
+                print(f"      - {item['codigo']} - {item['nombre'][:42]}", flush=True)
 
     wb.save(OUTPUT_FILE)
     wb.close()
 
-    _write_report(report)
+    _write_report(report, needs_doc)
 
     print("\n  COMPARISON SUMMARY", flush=True)
     print(f"  Rows found: {total_rows}", flush=True)
@@ -216,7 +249,12 @@ def run():
     print(f"  Rows without a valid LinkPlanificacion URL: {no_url}", flush=True)
     print(f"  Rows skipped (document without a valid code): {no_code}", flush=True)
     print(f"  Rows corrected: {corrected}", flush=True)
-    print(f"  Rows without document: {no_doc}", flush=True)
+    print(f"  Documents downloaded for NUEVO projects: {downloaded}", flush=True)
+    if skipped_invalid:
+        print(f"  Downloads skipped (local file marked NO VALIDO): {skipped_invalid}", flush=True)
+    print(f"  Rows without a document (need PDF in Planificaciones/): {no_doc}", flush=True)
+    if no_parse:
+        print(f"  Rows with a document but no parseable dates: {no_parse}", flush=True)
     print(f"  Report: {REPORT_FILE}", flush=True)
     return True
 
@@ -232,7 +270,7 @@ def _changelog_line(change):
     return f"\n      - {label}: '{old}' -> '{new}'"
 
 
-def _write_report(report):
+def _write_report(report, needs_doc):
     lines = [
         "# Date Comparison Report",
         "",
@@ -251,6 +289,16 @@ def _write_report(report):
         )
     lines.append("")
     lines.append(f"**Total rows corrected:** {len(report)}")
+    lines.append("")
+    lines.append("## Documents still missing")
+    lines.append("")
+    if not needs_doc:
+        lines.append("No inspected row lacked a document.")
+    for item in needs_doc:
+        lines.append(
+            f"- **{item['sheet']}** row {item['row']} - {item['codigo']} - "
+            f"{str(item['nombre'] or '')[:60]}"
+        )
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

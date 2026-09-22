@@ -3,6 +3,7 @@ import re
 import glob
 import hashlib
 import json
+import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PLANIFICACIONES_DIR = os.path.join(BASE_DIR, "Planificaciones")
@@ -58,6 +59,60 @@ def local_pdf_for_url(url):
     dest = os.path.join(PLANIFICACIONES_DIR, f"{file_id}.pdf")
     if os.path.exists(dest) and not is_invalid_doc(dest):
         return dest
+    return None
+
+
+def local_dest_for_url(url):
+    file_id = gdrive_file_id(url)
+    if not file_id:
+        return None
+    return os.path.join(PLANIFICACIONES_DIR, f"{file_id}.pdf")
+
+
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+_DL_CONFIRM_RE = re.compile(r"confirm=([0-9A-Za-z_-]+)")
+
+
+def _gdrive_open(dl_url):
+    req = urllib.request.Request(dl_url, headers={"User-Agent": _UA})
+    return urllib.request.urlopen(req, timeout=60)
+
+
+def _stream_download(resp, dest_path, prefix=b""):
+    with open(dest_path, "wb") as f:
+        if prefix:
+            f.write(prefix)
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            f.write(chunk)
+    return dest_path
+
+
+def download_gdrive_pdf(url, dest_path):
+    file_id = gdrive_file_id(url)
+    if not file_id:
+        return None
+    if os.path.exists(dest_path):
+        if not is_invalid_doc(dest_path):
+            return dest_path
+        return None
+    try:
+        resp = _gdrive_open(f"https://drive.google.com/uc?export=download&id={file_id}")
+        prefix = resp.read(4)
+        if prefix.startswith(b"%PDF"):
+            return _stream_download(resp, dest_path, prefix)
+        token = _DL_CONFIRM_RE.search((prefix + resp.read()).decode("utf-8", errors="replace"))
+        if token:
+            resp = _gdrive_open(
+                f"https://drive.google.com/uc?export=download&id={file_id}&confirm={token.group(1)}"
+            )
+            prefix = resp.read(4)
+            if prefix.startswith(b"%PDF"):
+                return _stream_download(resp, dest_path, prefix)
+    except Exception:
+        return None
     return None
 
 
