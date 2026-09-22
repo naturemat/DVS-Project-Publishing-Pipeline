@@ -47,6 +47,7 @@ jobs:
               'modules.date_comparison.comparator',
               'modules.date_comparison.date_extractor',
               'modules.date_comparison.pdf_reader',
+              'modules.date_comparison.autofill',
           ]
           for module_name in optional_modules:
               try:
@@ -59,7 +60,9 @@ jobs:
           "
 
       - name: Unit tests
-        run: python -m unittest discover -s tests -p "test_formatting.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_formatting.py" -v
+          python -m unittest discover -s tests -p "test_autofill.py" -v
 
   integration:
     name: Integration

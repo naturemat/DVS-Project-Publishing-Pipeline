@@ -4,7 +4,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-from modules.date_comparison import pdf_reader
+from modules.date_comparison import pdf_reader, autofill
 from modules.date_comparison.date_extractor import extract_project_code, extract_project_dates, normalize_for_compare
 from utils.column_mapper import ColumnMapper
 
@@ -256,6 +256,7 @@ def run():
     if no_parse:
         print(f"  Rows with a document but no parseable dates: {no_parse}", flush=True)
     print(f"  Report: {REPORT_FILE}", flush=True)
+    autofill.run(OUTPUT_FILE, REPORT_FILE)
     return True
 
 

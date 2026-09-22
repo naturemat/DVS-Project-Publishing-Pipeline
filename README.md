@@ -22,7 +22,8 @@ Excel_to_dtics/
 │   └── date_comparison/     # Module 2: PDF date extraction + comparison vs Excel dates
 │       ├── pdf_reader.py    # Match URLs to local Planificaciones/<file_id>.pdf; scan by project code
 │       ├── date_extractor.py # TIEMPOS DEL PROYECTO section → FechaInicio/FechaFin
-│       └── comparator.py    # Compare + overwrite dates + mark rows orange
+│       ├── comparator.py    # Compare + overwrite dates + mark rows orange
+│       └── autofill.py      # Autofill missing fields of VIGENTE rows from other sheets
 ├── docs/
 │   ├── spanish-text-formatting.md   # Detailed rules of the text engine
 │   └── career-normalization.md      # Career splitting + canonical naming rules
@@ -306,6 +307,18 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 - Rows whose document cannot be found or whose dates cannot be parsed are left unchanged. Hyperlinks and formatting survive the update.
 - A summary of every correction is written to `output/date_comparison_report.md`.
 
+### Autofill missing fields (last step of option 2)
+
+When the comparison pass finishes, option 2 makes one more attempt to complete rows that still have empty fields, reusing information already present elsewhere in the workbook:
+
+- Every managed period sheet is scanned and rows are grouped by `NombreProyecto` (**accent/case/whitespace-insensitive** match, so `Fortalecimiento agrícola` and `FORTALECIMIENTO AGRICOLA` count as the same project).
+- Only rows whose `TipoProyecto` is **`VIGENTE`** can be filled. `NUEVO` (and any other type) rows are skipped.
+- Fillable fields (when empty or `N/A`): `idCodigo`, `LinkPlanificacion`, `Facultad`, `Carrera`, `NombrePrograma`, `NombreCoordinador`, `Territorio`, `FechaInicio`, `FechaFin`. Dates are copied only when the source holds a **full `DD/MM/YYYY`** value; `N/A`, blanks and month+year-only text are never used.
+- The source is the first non-empty cell of the same project found anywhere in the workbook (any sheet, including other periods). If a `VIGENTE` project continues from a `NUEVO` period, the previous sheet's data is reused.
+- Filled `LinkPlanificacion` cells become clickable hyperlinks (Aptos Narrow 10pt, blue `0563C1`, single underline), like option 1.
+- **Colors are never touched** by autofill: red/orange markings from previous steps are preserved.
+- Every filled cell is logged to the console and appended to `output/date_comparison_report.md` under `## Autofill (same NombreProyecto across sheets, VIGENTE only)`.
+
 ## Color Coding
 
 - **Red** - the row is missing one or more required fields (`Facultad`, `Carrera`, `NombreProyecto`, `NombrePrograma`, `NombreCoordinador`, `Territorio`, `FechaInicio`, `FechaFin`, `idCodigo`). Missing URLs never cause a red mark.
@@ -314,7 +327,7 @@ The tool reads the `1.4 TIEMPOS DEL PROYECTO` section on pages 2-3 and collects 
 ## Reports
 
 - `output/missing_data_report.md` lists every row with missing data: source row number, code, project name, and the list of missing fields. The report is only generated when at least one row is missing data.
-- `output/date_comparison_report.md` lists every date correction applied by module 2: sheet, row, project code, and the old -> new date changes.
+- `output/date_comparison_report.md` lists every date correction applied by module 2: sheet, row, project code, and the old -> new date changes. When option 2 finishes, the autofill step appends the cells it completed under its own `## Autofill` section.
 
 ## Config Files Reference
 
@@ -345,7 +358,7 @@ Feature branches are deleted automatically after their merge by enabling the Git
 
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
-| `ci.yml` | PR opened/updated to `main` or `dev`; push to `main` or `dev` | 1. **Validation**: syntax check (`compileall`), import smoke test, unit tests (`tests/test_formatting.py`). 2. **Integration**: runs `tests/test_integration.py`, which formats every `EJEMPLO PERIODO *.xlsx` and writes a real period sheet into `output/`, using the base BD workbook (created on demand in CI). |
+| `ci.yml` | PR opened/updated to `main` or `dev`; push to `main` or `dev` | 1. **Validation**: syntax check (`compileall`), import smoke test, unit tests (`tests/test_formatting.py`, `tests/test_autofill.py`). 2. **Integration**: runs `tests/test_integration.py`, which formats every `EJEMPLO PERIODO *.xlsx` and writes a real period sheet into `output/`, using the base BD workbook (created on demand in CI). |
 | `release.yml` | push to `main` | Computes the next version with `scripts/semver.py` and creates + pushes an annotated `vX.Y.Z` tag. Requires the `production` environment. |
 
 ### Semver rules
@@ -364,6 +377,7 @@ Merge-commit subjects are ignored. With no previous tag, the version starts at `
 
 ```bash
 venv\Scripts\python.exe -m unittest discover -s tests -p "test_formatting.py" -v
+venv\Scripts\python.exe -m unittest discover -s tests -p "test_autofill.py" -v
 venv\Scripts\python.exe -m unittest discover -s tests -p "test_integration.py" -v
 venv\Scripts\python.exe scripts\semver.py
 ```
@@ -381,3 +395,4 @@ venv\Scripts\python.exe scripts\semver.py
 - **New date format** - add the pattern to `DATE_FORMATS` or the month/numeric helpers in `utils/data_formatter.py`.
 - **New date pattern in PDFs** - adjust the regexes in `modules/date_comparison/date_extractor.py` (`_DATE_TOKEN_RE`, `_TIEMPOS_RE`).
 - **New document location** - extend `modules/date_comparison/pdf_reader.py` (`local_pdf_for_url`, `index_local_pdfs`).
+- **New autofill-able field** - add it to `FILLABLE_FIELDS` in `modules/date_comparison/autofill.py` (matching a column in `OUTPUT_COLUMNS`).
