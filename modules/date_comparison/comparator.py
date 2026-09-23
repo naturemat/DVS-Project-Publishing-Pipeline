@@ -2,31 +2,18 @@ import os
 import re
 from datetime import datetime
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
 
-from modules.date_comparison import pdf_reader, autofill
-from modules.date_comparison.date_extractor import extract_project_code, extract_project_dates, normalize_for_compare
+from modules.date_comparison import pdf_reader, autofill, consistency, rowstate
+from modules.date_comparison.date_extractor import extract_project_code, extract_project_dates, extract_project_name, extract_project_career, normalize_for_compare
 from utils.column_mapper import ColumnMapper
+from utils.data_formatter import DataFormatter
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "BDVinculacionn.xlsx")
 REPORT_FILE = os.path.join(OUTPUT_DIR, "date_comparison_report.md")
 
-ORANGE_FILL = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
-RED_RGB = ("FFFF0000", "00FF0000")
 _FULL_DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
-
-
-def _is_red(cell):
-    rgb = getattr(cell.fill.start_color, "rgb", None)
-    return rgb in RED_RGB
-
-
-def _set_orange(row_cells):
-    for cell in row_cells:
-        if not _is_red(cell):
-            cell.fill = ORANGE_FILL
 
 
 def _headers(ws):
@@ -35,10 +22,6 @@ def _headers(ws):
         for idx, cell in enumerate(ws[1], 1)
         if cell.value
     }
-
-
-def _row_cells(ws, r, num_cols):
-    return [ws.cell(r, c) for c in range(1, num_cols + 1)]
 
 
 def _select_sheets(available):
@@ -99,6 +82,8 @@ def run():
     report = []
     dates_cache = {}
     code_cache = {}
+    name_cache = {}
+    career_cache = {}
     local_index = None
 
     for sheet_name in selected:
@@ -188,6 +173,25 @@ def run():
                 changes.append(("idCodigo", row_cell.value, pdf_code))
                 row_cell.value = pdf_code
 
+            if pdf_path not in name_cache:
+                name_cache[pdf_path] = extract_project_name(pdf_path)
+            pdf_name = name_cache[pdf_path]
+            if pdf_name:
+                formatted_name = DataFormatter.proyecto_case(DataFormatter.normalize_separators(pdf_name))
+                if rowstate.normalized(ws.cell(r, nombre_col).value) != rowstate.normalized(formatted_name):
+                    changes.append(("NombreProyecto", ws.cell(r, nombre_col).value, formatted_name))
+                    ws.cell(r, nombre_col).value = formatted_name
+
+            if (pdf_path, pdf_code) not in career_cache:
+                career_cache[(pdf_path, pdf_code)] = extract_project_career(pdf_path, code=pdf_code)
+            pdf_career = career_cache[(pdf_path, pdf_code)]
+            carrera_col = headers.get("Carrera")
+            if pdf_career and carrera_col:
+                formatted_career = DataFormatter.split_careers(pdf_career.strip().upper())
+                if rowstate.normalized(ws.cell(r, carrera_col).value) != rowstate.normalized(formatted_career):
+                    changes.append(("Carrera", ws.cell(r, carrera_col).value, formatted_career))
+                    ws.cell(r, carrera_col).value = formatted_career
+
             if pdf_path in dates_cache:
                 doc_dates = dates_cache[pdf_path]
             else:
@@ -198,7 +202,7 @@ def run():
                 if changes:
                     corrected += 1
                     per_sheet += 1
-                    _set_orange(_row_cells(ws, r, num_cols))
+                    rowstate.mark_corrected(ws, r, num_cols, headers)
                     report.append({
                         "sheet": sheet_name,
                         "row": r,
@@ -223,7 +227,7 @@ def run():
             if changes:
                 corrected += 1
                 per_sheet += 1
-                _set_orange(_row_cells(ws, r, num_cols))
+                rowstate.mark_corrected(ws, r, num_cols, headers)
                 report.append({
                     "sheet": sheet_name,
                     "row": r,
@@ -257,6 +261,7 @@ def run():
         print(f"  Rows with a document but no parseable dates: {no_parse}", flush=True)
     print(f"  Report: {REPORT_FILE}", flush=True)
     autofill.run(OUTPUT_FILE, REPORT_FILE)
+    consistency.run(OUTPUT_FILE, REPORT_FILE)
     return True
 
 
@@ -264,10 +269,13 @@ def _changelog_line(change):
     if change is None:
         return None
     key, old, new = change
-    if key == "idCodigo":
-        label = "Código del proyecto"
-    else:
-        label = "Fecha de inicio" if key == "FechaInicio" else "Fecha de finalización"
+    label = {
+        "idCodigo": "Código del proyecto",
+        "NombreProyecto": "Nombre del proyecto",
+        "Carrera": "Carrera",
+        "FechaInicio": "Fecha de inicio",
+        "FechaFin": "Fecha de finalización",
+    }.get(key, key)
     return f"\n      - {label}: '{old}' -> '{new}'"
 
 

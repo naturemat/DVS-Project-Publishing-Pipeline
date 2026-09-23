@@ -5,6 +5,13 @@ from utils.data_formatter import DataFormatter, SPANISH_MONTHS
 
 _TIEMPOS_RE = re.compile(r"TIEMPOS\s+DEL\s+PROYECTO", re.IGNORECASE)
 
+_PROYECTO_NOMBRE_RE = re.compile(
+    r"C[óo]digo\s+del\s+[Pp]royecto:\s*(.*?)\s*Nombre\s+del\s+[Pp]royecto:",
+    re.DOTALL,
+)
+
+_CARRERA_RE = re.compile(r"Carreras?\s*:\s*([^\n]+)", re.IGNORECASE)
+
 _DATE_TOKEN_RE = re.compile(
     r"(?:\d{1,2}\s+de\s+(?:del\s+|el\s+|de\s+)?)?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{4,}\s+(?:del\s+|de\s+)?\d{4}",
     re.IGNORECASE,
@@ -109,4 +116,32 @@ def extract_project_code(pdf_path):
             m = code_re.search(page.extract_text() or "")
             if m:
                 return m.group(1)
+    return None
+
+
+def extract_project_name(pdf_path, text=None):
+    if text is None:
+        text = _read_pages(pdf_path, max_pages=3)
+    m = _PROYECTO_NOMBRE_RE.search(text)
+    if not m:
+        return None
+    value = re.sub(r"\s+", " ", m.group(1)).strip()
+    value = re.sub(r"^\s*P\d{1,2}[A-Z]+\d+\s*", "", value)
+    return value.strip(" .,;:-") or None
+
+
+def extract_project_career(pdf_path, text=None, code=None):
+    if text is None:
+        text = _read_pages(pdf_path, max_pages=3)
+    anchor = None
+    if code:
+        cm = re.search(re.escape(code), text, re.IGNORECASE)
+        if cm:
+            anchor = cm.start()
+    positions = [m.start() for m in _CARRERA_RE.finditer(text)]
+    if positions:
+        pos = min(positions, key=lambda p: abs(p - (anchor if anchor is not None else p)))
+        m = _CARRERA_RE.search(text, pos)
+        value = re.sub(r"\s+", " ", m.group(1)).strip(" .-")
+        return value or None
     return None

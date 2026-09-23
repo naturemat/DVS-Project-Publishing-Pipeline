@@ -34,7 +34,12 @@ class FileExtractor:
             all_cols = set(col_map.values()) - {None}
             max_col = max(all_cols) if all_cols else 0
             for col in range(1, max_col + 1):
-                row_data[col] = ws.cell(row_idx, col).value
+                cell = ws.cell(row_idx, col)
+                value = cell.value
+                if cell.hyperlink and isinstance(cell.hyperlink.target, str):
+                    if cell.hyperlink.target.startswith("http"):
+                        value = cell.hyperlink.target
+                row_data[col] = value
             row_data["_row_idx"] = row_idx
             rows.append(row_data)
 

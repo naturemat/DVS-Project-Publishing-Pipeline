@@ -5,6 +5,7 @@ from datetime import datetime, date
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 
+from modules.date_comparison import rowstate
 from utils.column_mapper import ColumnMapper
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -117,6 +118,7 @@ def _fill_sheet(ws, headers, index, changes):
             filled.append(field)
         if filled:
             cells_filled += len(filled)
+            rowstate.mark_corrected(ws, r, ws.max_column, headers)
             changes.append({
                 "sheet": ws.title,
                 "row": r,

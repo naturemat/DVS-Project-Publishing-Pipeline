@@ -94,6 +94,7 @@ class AutofillTests(unittest.TestCase):
             target_ws = filled_wb["2026-2026"]
             link_cell = target_ws.cell(2, HEADERS.index("LinkPlanificacion") + 1)
             self.assertEqual(link_cell.hyperlink.target, DRIVE_URL)
+            self.assertEqual(target_ws.cell(2, 1).fill.start_color.rgb, "00FFA500")
             filled_wb.close()
 
             with open(rep_path, encoding="utf-8") as f:
@@ -130,9 +131,11 @@ class AutofillTests(unittest.TestCase):
 
             out = load_workbook(wb_path)
             target = self._rows(out["2026-2026"])[0]
+            red_rgb = out["2026-2026"].cell(2, 1).fill.start_color.rgb
             out.close()
             self.assertEqual(target["FechaInicio"], "")
             self.assertGreaterEqual(filled, 1)
+            self.assertEqual(red_rgb, "00FF0000")
 
     def test_same_sheet_row_not_used_as_own_source(self):
         row = self._source_row()
