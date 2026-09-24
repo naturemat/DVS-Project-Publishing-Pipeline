@@ -196,7 +196,7 @@ Every generated period sheet replicates the base BD format exactly:
 | Territorio | Title case, locations separated by commas | Quito, Guaranda, Echeandía |
 | FechaInicio | DD/MM/YYYY | 01/04/2025 |
 | FechaFin | DD/MM/YYYY | 01/04/2026 |
-| Anio | Year derived from the period | 2025 |
+| Anio | Year derived from FechaFin (fallback: the period) | 2026 |
 | LinkPlanificacion | Valid Google Drive file URL → clickable hyperlink; everything else → `N/A` | https://drive.google.com/file/d/... |
 | Link* (others) | Always N/A | N/A |
 
@@ -270,6 +270,10 @@ Some careers always belong to one specific faculty. The mapping lives in **`carr
 | `DERECHO` | `JURISPRUDENCIA, CIENCIAS POLÍTICAS Y SOCIALES` |
 | `BIOLOGÍA` | `CIENCIAS BIOLÓGICAS` |
 | `INGENIERÍA EN RECURSOS NATURALES RENOVABLES` | `CIENCIAS BIOLÓGICAS` |
+| `ATENCIÓN PREHOSPITALARIA` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
+| `FISIOTERAPIA` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
+| `FONOAUDIOLOGÍA` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
+| `TERAPIA OCUPACIONAL` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
 
 Keys are matched accent/case-insensitively, so `AGRONOMIA` or `ingenieria agronomica` still match. This runs after the faculty matcher, so an override always wins. Note also that the faculty matcher strips trailing punctuation (`CIENCIAS AGRICOLAS.` -> `CIENCIAS AGRÍCOLAS`).
 

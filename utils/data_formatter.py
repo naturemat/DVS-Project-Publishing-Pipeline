@@ -190,6 +190,13 @@ class DataFormatter:
             return None
         return cls._safe_date(cls._full_year(year), month, 1).strftime("%d/%m/%Y")
 
+    @classmethod
+    def _year_from_fecha_fin(cls, fecha_fin):
+        if not fecha_fin:
+            return None
+        match = re.search(r"\b(\d{4})\b", str(fecha_fin))
+        return match.group(1) if match else None
+
     @staticmethod
     def _strip_accents(text):
         normalized = unicodedata.normalize("NFD", text)
@@ -453,7 +460,7 @@ class DataFormatter:
                     parsed = first_day
                     date_autocompleted = True
             out[date_field] = parsed
-        out["Anio"] = ColumnMapper.extract_year_from_period(period)
+        out["Anio"] = cls._year_from_fecha_fin(out.get("FechaFin")) or ColumnMapper.extract_year_from_period(period)
 
         for link_field in ["LinkLevantamientoBase", "LinkJuridico", "LinkConvenio",
                            "LinkAprobacion", "LinkCronogramaActividades"]:
