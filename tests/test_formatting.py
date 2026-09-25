@@ -58,6 +58,41 @@ class FacultyTests(unittest.TestCase):
     def test_unknown_keeps_source(self):
         self.assertEqual(self.matcher.normalize("INVENTADA"), "INVENTADA")
 
+    def test_new_discapacidad_faculty_matches(self):
+        self.assertEqual(
+            self.matcher.normalize("CIENCIAS DE LA DISCAPACIDAD, ATENCION PREHOSPITALARIA Y DESASTRES"),
+            "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES",
+        )
+
+    def test_discapacidad_faculty_alias(self):
+        self.assertEqual(
+            self.matcher.normalize("DISCAPACIDAD"),
+            "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES",
+        )
+
+
+class CareerToFacultyOverrideTests(unittest.TestCase):
+
+    def test_discapacidad_careers_map_to_faculty(self):
+        faculty = "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES"
+        for career in ["ATENCIÓN PREHOSPITALARIA", "FISIOTERAPIA", "FONOAUDIOLOGÍA", "TERAPIA OCUPACIONAL"]:
+            self.assertEqual(DataFormatter.carrera_facultad(career), faculty)
+        self.assertEqual(DataFormatter.carrera_facultad("fisioterapia"), faculty)
+
+    def test_variant_with_space_in_prehospitalaria(self):
+        faculty = "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES"
+        self.assertEqual(DataFormatter.carrera_facultad("ATENCION PRE HOSPITALARIA"), faculty)
+        self.assertEqual(DataFormatter.carrera_facultad("ATENCIÓN PREHOSPITALARIA Y DESASTRES"), faculty)
+
+    def test_multi_career_resolves_when_all_same_faculty(self):
+        faculty = "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES"
+        multi = DataFormatter.split_careers("FISIOTERAPIA Y TERAPIA OCUPACIONAL")
+        self.assertEqual(DataFormatter.carrera_facultad(multi), faculty)
+
+    def test_mixed_faculties_do_not_collapse(self):
+        multi = DataFormatter.split_careers("AGRONOMÍA Y FISIOTERAPIA")
+        self.assertIsNone(DataFormatter.carrera_facultad(multi))
+
 
 class FieldFormattingTests(unittest.TestCase):
 
@@ -118,6 +153,16 @@ class FieldFormattingTests(unittest.TestCase):
         out = self._format()
         self.assertEqual(out["FechaInicio"], "01/04/2025")
         self.assertEqual(out["FechaFin"], "01/04/2026")
+
+    def test_anio_derived_from_fecha_fin(self):
+        out = self._format()
+        self.assertEqual(out["Anio"], "2026")
+
+    def test_anio_falls_back_to_period_when_no_fecha_fin(self):
+        row = self._raw_row()
+        row[self.col_map["FechaFin"]] = "N/A"
+        out = DataFormatter.format_row(row, self.col_map, [], "25-25")
+        self.assertEqual(out["Anio"], "2025")
 
     def test_valid_link_kept(self):
         self.assertEqual(self._format()["LinkPlanificacion"], "https://drive.google.com/file/d/abc123/view")

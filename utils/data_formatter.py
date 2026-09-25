@@ -45,16 +45,27 @@ class DataFormatter:
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
         cls._carrera_facultad_norm = {
-            cls._strip_accents(str(key).upper()): str(value)
+            cls._lookup_key(key): str(value)
             for key, value in raw.items()
         }
+
+    @staticmethod
+    def _lookup_key(value):
+        return re.sub(r"\s+", "", DataFormatter._strip_accents(str(value).upper()))
 
     @classmethod
     def carrera_facultad(cls, value):
         if not value:
             return None
         cls._load_carrera_facultad()
-        return cls._carrera_facultad_norm.get(cls._strip_accents(str(value).upper()))
+        parts = [p for p in str(value).split("\u2022") if p.strip()]
+        found = set()
+        for part in parts:
+            faculty = cls._carrera_facultad_norm.get(cls._lookup_key(part))
+            if not faculty:
+                return None
+            found.add(faculty)
+        return found.pop() if len(found) == 1 else None
 
     _carreras_norm = None
     _carreras_canonical = None
@@ -189,6 +200,13 @@ class DataFormatter:
         if month is None or year is None:
             return None
         return cls._safe_date(cls._full_year(year), month, 1).strftime("%d/%m/%Y")
+
+    @classmethod
+    def _year_from_fecha_fin(cls, fecha_fin):
+        if not fecha_fin:
+            return None
+        match = re.search(r"\b(\d{4})\b", str(fecha_fin))
+        return match.group(1) if match else None
 
     @staticmethod
     def _strip_accents(text):
@@ -453,7 +471,7 @@ class DataFormatter:
                     parsed = first_day
                     date_autocompleted = True
             out[date_field] = parsed
-        out["Anio"] = ColumnMapper.extract_year_from_period(period)
+        out["Anio"] = cls._year_from_fecha_fin(out.get("FechaFin")) or ColumnMapper.extract_year_from_period(period)
 
         for link_field in ["LinkLevantamientoBase", "LinkJuridico", "LinkConvenio",
                            "LinkAprobacion", "LinkCronogramaActividades"]:
