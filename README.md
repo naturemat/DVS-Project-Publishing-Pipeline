@@ -275,7 +275,7 @@ Some careers always belong to one specific faculty. The mapping lives in **`carr
 | `FONOAUDIOLOGÍA` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
 | `TERAPIA OCUPACIONAL` | `CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES` |
 
-Keys are matched accent/case-insensitively, so `AGRONOMIA` or `ingenieria agronomica` still match. This runs after the faculty matcher, so an override always wins. Note also that the faculty matcher strips trailing punctuation (`CIENCIAS AGRICOLAS.` -> `CIENCIAS AGRÍCOLAS`).
+Keys are matched accent/case-insensitively and ignore spaces (`ATENCION PRE HOSPITALARIA` matches `ATENCIÓN PREHOSPITALARIA`). This runs after the faculty matcher, so an override always wins. A cell listing several careers (`FISIOTERAPIA Y TERAPIA OCUPACIONAL`) is resolved only when **all** its careers map to the same faculty, otherwise the overridden row keeps the matcher's result. Note also that the faculty matcher strips trailing punctuation (`CIENCIAS AGRICOLAS.` -> `CIENCIAS AGRÍCOLAS`).
 
 ## Programas.json Lookup
 

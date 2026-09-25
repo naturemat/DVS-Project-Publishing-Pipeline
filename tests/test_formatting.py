@@ -79,6 +79,20 @@ class CareerToFacultyOverrideTests(unittest.TestCase):
             self.assertEqual(DataFormatter.carrera_facultad(career), faculty)
         self.assertEqual(DataFormatter.carrera_facultad("fisioterapia"), faculty)
 
+    def test_variant_with_space_in_prehospitalaria(self):
+        faculty = "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES"
+        self.assertEqual(DataFormatter.carrera_facultad("ATENCION PRE HOSPITALARIA"), faculty)
+        self.assertEqual(DataFormatter.carrera_facultad("ATENCIÓN PREHOSPITALARIA Y DESASTRES"), faculty)
+
+    def test_multi_career_resolves_when_all_same_faculty(self):
+        faculty = "CIENCIAS DE LA DISCAPACIDAD, ATENCIÓN PRE HOSPITALARIA Y DESASTRES"
+        multi = DataFormatter.split_careers("FISIOTERAPIA Y TERAPIA OCUPACIONAL")
+        self.assertEqual(DataFormatter.carrera_facultad(multi), faculty)
+
+    def test_mixed_faculties_do_not_collapse(self):
+        multi = DataFormatter.split_careers("AGRONOMÍA Y FISIOTERAPIA")
+        self.assertIsNone(DataFormatter.carrera_facultad(multi))
+
 
 class FieldFormattingTests(unittest.TestCase):
 
