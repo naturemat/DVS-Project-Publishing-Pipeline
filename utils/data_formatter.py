@@ -32,11 +32,40 @@ _LINK_PLANIFICACION_RE = re.compile(r"^https://drive\.google\.com/file/d/[A-Za-z
 
 class DataFormatter:
 
-    CARRERA_FACULTAD_OVERRIDE = {
-        "DERECHO": "JURISPRUDENCIA, CIENCIAS POLÍTICAS Y SOCIALES",
-        "BIOLOGÍA": "CIENCIAS BIOLÓGICAS",
-        "INGENIERÍA EN RECURSOS NATURALES RENOVABLES": "CIENCIAS BIOLÓGICAS",
-    }
+    _carrera_facultad_norm = None
+
+    @classmethod
+    def _load_carrera_facultad(cls):
+        if cls._carrera_facultad_norm is not None:
+            return
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "carrera_facultad.json",
+        )
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        cls._carrera_facultad_norm = {
+            cls._lookup_key(key): str(value)
+            for key, value in raw.items()
+        }
+
+    @staticmethod
+    def _lookup_key(value):
+        return re.sub(r"\s+", "", DataFormatter._strip_accents(str(value).upper()))
+
+    @classmethod
+    def carrera_facultad(cls, value):
+        if not value:
+            return None
+        cls._load_carrera_facultad()
+        parts = [p for p in str(value).split("\u2022") if p.strip()]
+        found = set()
+        for part in parts:
+            faculty = cls._carrera_facultad_norm.get(cls._lookup_key(part))
+            if not faculty:
+                return None
+            found.add(faculty)
+        return found.pop() if len(found) == 1 else None
 
     _carreras_norm = None
     _carreras_canonical = None
@@ -56,11 +85,6 @@ class DataFormatter:
             for name in raw
         }
         cls._carreras_canonical = set(cls._carreras_norm.values())
-
-    @classmethod
-    def _is_known_career(cls, value):
-        cls._load_carreras()
-        return cls._strip_accents(str(value).upper()) in cls._carreras_norm
 
     @classmethod
     def _canonical_career(cls, value):
@@ -119,7 +143,9 @@ class DataFormatter:
             return canonical
         chain = cls._find_career_chain(s)
         if chain:
-            return ", ".join(chain)
+            return " ".join("•" + c for c in chain)
+        if ", " in s:
+            return " ".join("•" + p.strip() for p in s.split(", "))
         return s
 
     @classmethod
@@ -151,6 +177,36 @@ class DataFormatter:
                 )
                 return has_year
         return False
+
+    @classmethod
+    def _first_day_month_year(cls, text):
+        if not text:
+            return None
+        s = str(text).strip()
+        if not cls._is_month_year_text(s):
+            return None
+        lowered = cls._strip_accents(s.lower())
+        month = None
+        for name, num in SPANISH_MONTHS.items():
+            if re.search(r"\b" + name + r"\b", lowered):
+                month = num
+                break
+        year = None
+        for m in re.finditer(r"\d+", s):
+            num = int(m.group())
+            if num > 31 or (len(str(num)) == 4 and 1900 <= num <= 2100):
+                year = num
+                break
+        if month is None or year is None:
+            return None
+        return cls._safe_date(cls._full_year(year), month, 1).strftime("%d/%m/%Y")
+
+    @classmethod
+    def _year_from_fecha_fin(cls, fecha_fin):
+        if not fecha_fin:
+            return None
+        match = re.search(r"\b(\d{4})\b", str(fecha_fin))
+        return match.group(1) if match else None
 
     @staticmethod
     def _strip_accents(text):
@@ -323,6 +379,36 @@ class DataFormatter:
         return s.strip()
 
     @staticmethod
+    def normalize_territorio_separators(value):
+        if not value:
+            return value
+        s = str(value).strip()
+        if not s:
+            return s
+        placeholders = []
+
+        def keep(m):
+            placeholders.append(m.group(0))
+            return f"\x00{len(placeholders) - 1}\x00"
+
+        s = re.sub(r"\by/o\b", keep, s, flags=re.IGNORECASE)
+        s = re.sub(r"\b\d+\s*/\s*\d+(?:\s*/\s*\d+)?\b", keep, s)
+        s = re.sub(r"(?<=\d)\s*[-]\s*(?=\d)", keep, s)
+        s = re.sub(r"\s*/\s*", ", ", s)
+        s = re.sub(r"\s*&\s*", ", ", s)
+        s = re.sub(r"\s*-\s*", ", ", s)
+        s = re.sub(r"\s+y\s+", ", ", s, flags=re.IGNORECASE)
+        s = re.sub(r"^\s*y\s+", ", ", s, flags=re.IGNORECASE)
+        s = re.sub(r"\s+y\s*$", ", ", s, flags=re.IGNORECASE)
+        for idx, val in enumerate(placeholders):
+            s = s.replace(f"\x00{idx}\x00", val.lower())
+        s = re.sub(r",\s*,", ",", s)
+        s = re.sub(r"\s*,\s*", ", ", s)
+        s = re.sub(r"\s{2,}", " ", s)
+        s = re.sub(r",\s*$", "", s)
+        return s.strip()
+
+    @staticmethod
     def extract_program_number(codigo):
         if not codigo:
             return None
@@ -358,7 +444,7 @@ class DataFormatter:
 
         if out.get("TipoProyecto"):
             val = str(out["TipoProyecto"]).strip().upper()
-            out["TipoProyecto"] = val
+            out["TipoProyecto"] = re.sub(r"^PROYECTO\s+", "", val)
 
         if out.get("idCodigo"):
             out["idCodigo"] = str(out["idCodigo"]).strip().upper()
@@ -373,11 +459,19 @@ class DataFormatter:
             out["NombreCoordinador"] = cls.title_case(out["NombreCoordinador"])
 
         if out.get("Territorio"):
-            out["Territorio"] = cls.title_case(cls.normalize_separators(out["Territorio"]))
+            out["Territorio"] = cls.title_case(cls.normalize_territorio_separators(out["Territorio"]))
 
-        out["FechaInicio"] = cls.parse_date(out.get("FechaInicio"), preserve_text=True)
-        out["FechaFin"] = cls.parse_date(out.get("FechaFin"), preserve_text=True)
-        out["Anio"] = ColumnMapper.extract_year_from_period(period)
+        date_autocompleted = False
+        for date_field in ["FechaInicio", "FechaFin"]:
+            raw = out.get(date_field)
+            parsed = cls.parse_date(raw, preserve_text=True)
+            if parsed and not re.match(r"^\d{2}/\d{2}/\d{4}$", parsed):
+                first_day = cls._first_day_month_year(raw)
+                if first_day:
+                    parsed = first_day
+                    date_autocompleted = True
+            out[date_field] = parsed
+        out["Anio"] = cls._year_from_fecha_fin(out.get("FechaFin")) or ColumnMapper.extract_year_from_period(period)
 
         for link_field in ["LinkLevantamientoBase", "LinkJuridico", "LinkConvenio",
                            "LinkAprobacion", "LinkCronogramaActividades"]:
@@ -413,5 +507,6 @@ class DataFormatter:
 
         out["_missing"] = missing
         out["_program_info_found"] = program_info_found
+        out["_date_autocompleted"] = date_autocompleted
 
         return out

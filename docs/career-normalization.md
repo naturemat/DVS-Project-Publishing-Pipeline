@@ -43,8 +43,8 @@ Matching is **accent- and case-insensitive**: `BIOQUIMICA Y FARMACIA` matches th
 2. **Exact known-career lookup** (accent/case-insensitive) on the whole string. If it matches a `carreras.json` entry, the canonical form is returned - nothing else happens. This is what protects `MEDICINA VETERINARIA Y ZOOTECNIA` and `INGENIERÍA EN DISEÑO INDUSTRIAL / DISEÑO INDUSTRIAL` from being split.
 3. **Normalize separators** (`/` -> `, ` unless date-like or `y/o`), collapse spaces.
 4. **Known-career lookup again** on the normalized string.
-5. **Career-chain matching** (`_find_career_chain`) - the main splitting engine.
-6. **Fallback** - if nothing above qualifies, the normalized source text is returned unchanged.
+5. **Career-chain matching** (`_find_career_chain`) - the main splitting engine. Its parts are prefixed with `•` and joined (e.g. `•QUÍMICA •BIOQUÍMICA Y FARMACIA`).
+6. **Fallback** - if nothing above qualifies, the normalized source text is returned, bullet-prefixed per part when several parts are present.
 
 ### The chain matcher
 
@@ -54,17 +54,15 @@ Matching is **accent- and case-insensitive**: `BIOQUIMICA Y FARMACIA` matches th
 - contains **at least two** careers,
 - leaves only separator characters (` `, `,`, `/`, `-`, `Y`) in the gaps between consecutive matches.
 
-If such a chain exists, its careers are joined in order with `, `.
-
-Greedy merging makes the multi-`Y` case correct:
+If such a chain exists, its careers are joined in order, each prefixed with `•`:
 
 ```
 Input : QUIMICA Y BIOQUIMICA Y FARMACIA
 Careers found in order: QUÍMICA, BIOQUÍMICA Y FARMACIA
-Output: QUÍMICA, BIOQUÍMICA Y FARMACIA
+Output: •QUÍMICA •BIOQUÍMICA Y FARMACIA
 ```
 
-Because `BIOQUÍMICA Y FARMACIA` is itself a known entry, it wins over splitting into `BIOQUÍMICA` + `FARMACIA` (which would be wrong).
+Greedy merging makes the multi-`Y` case correct: because `BIOQUÍMICA Y FARMACIA` is itself a known entry, it wins over splitting into `BIOQUÍMICA` + `FARMACIA` (which would be wrong).
 
 ## Worked examples
 
@@ -74,15 +72,15 @@ Because `BIOQUÍMICA Y FARMACIA` is itself a known entry, it wins over splitting
 | `BIOQUIMICA Y FARMACIA` | `BIOQUÍMICA Y FARMACIA` | Known combined single (step 2) |
 | `MEDICINA VETERINARIA Y ZOOTECNIA` | `MEDICINA VETERINARIA Y ZOOTECNIA` | Known combined single (step 2) |
 | `INGENIERIA INFORMATICA / SISTEMAS DE INFORMACIÓN` | `INGENIERÍA INFORMÁTICA / SISTEMAS DE INFORMACIÓN` | Known combined single with `/` (step 2) |
-| `TURISMO - INGENIERÍA AGRONÓMICA` | `TURISMO, INGENIERÍA AGRONÓMICA` | Split: both parts known (step 5) |
-| `ECONOMÍA Y ESTADISTICA` | `ECONOMÍA, ESTADÍSTICA` | Split: both parts known (step 5) |
-| `BIOQUIMICA Y FARMACIA / QUIMICA` | `BIOQUÍMICA Y FARMACIA, QUÍMICA` | Split after `/` (step 3 + 5) |
-| `CONTABILIDAD Y AUDITORIA/\nADMINISTRACIÓN PÚBLICA` | `CONTABILIDAD Y AUDITORÍA, ADMINISTRACIÓN PÚBLICA` | Split after `/`+newline (steps 3-5) |
-| `ECONOMIA/INGENIERIA EN ESTADÍSTICA/ IONEGENIERIA EN FINANZAS` | `ECONOMIA, INGENIERIA EN ESTADÍSTICA, IONEGENIERIA EN FINANZAS` | `IONEGENIERIA` is a source typo, unknown -> each part falls back as source text |
+| `TURISMO - INGENIERÍA AGRONÓMICA` | `•TURISMO •INGENIERÍA AGRONÓMICA` | Split: both parts known (step 5) |
+| `ECONOMÍA Y ESTADISTICA` | `•ECONOMÍA •ESTADÍSTICA` | Split: both parts known (step 5) |
+| `BIOQUIMICA Y FARMACIA / QUIMICA` | `•BIOQUÍMICA Y FARMACIA •QUÍMICA` | Split after `/` (step 3 + 5) |
+| `CONTABILIDAD Y AUDITORIA/\nADMINISTRACIÓN PÚBLICA` | `•CONTABILIDAD Y AUDITORÍA •ADMINISTRACIÓN PÚBLICA` | Split after `/`+newline (steps 3-5) |
+| `ECONOMIA/INGENIERIA EN ESTADÍSTICA/ IONEGENIERIA EN FINANZAS` | `•ECONOMIA •INGENIERIA EN ESTADÍSTICA •IONEGENIERIA EN FINANZAS` | `IONEGENIERIA` is a source typo, unknown -> each part falls back as source text |
 
 ## Unknown or ambiguous values
 
-Values that do not decode into known careers are left as the normalized source text. Typed data containing typos (e.g. source `IONEGENIERIA EN FINANZAS`, `RADDIOLOGÍA E IMAGENOLOGÍA`) stays readable in the cell rather than being destroyed. To fix such cases, add the correct name to `carreras.json`.
+Values that do not decode into known careers are left as the normalized source text. Typed data containing typos (e.g. source `IONEGENIERIA EN FINANZAS`, `RADDIOLOGÍA E IMAGENOLOGÍA`) stays readable in the cell rather than being destroyed; when the fallback lists several parts they are separated with `•`. To fix such cases, add the correct name to `carreras.json`.
 
 ## How to add or change a career
 

@@ -79,10 +79,13 @@ class PipelineIntegrationTests(unittest.TestCase):
 
     def test_cli_end_to_end(self):
         extractor = FileExtractor(extract_data.BASE_DIR)
+        files = extractor.list_files()
         filename = self._examples()[0]
         period = ColumnMapper.detect_period(filename)
         sheet_name = ColumnMapper.get_sheet_name(period)
-        with mock.patch("extract_data.show_menu", return_value=filename):
+        file_number = str(files.index(filename) + 1)
+        inputs = iter(["1", file_number, "0"])
+        with mock.patch("builtins.input", side_effect=lambda prompt: next(inputs)):
             extract_data.main()
         wb = openpyxl.load_workbook(extract_data.OUTPUT_FILE)
         self.assertIn(sheet_name, wb.sheetnames)

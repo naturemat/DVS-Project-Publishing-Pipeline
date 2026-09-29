@@ -93,8 +93,6 @@ class ColumnMapper:
         "LinkCronogramaActividades", "idCodigo"
     ]
 
-    UPPERCASE_FIELDS = {"Facultad", "Carrera", "TipoProyecto", "idCodigo"}
-
     @classmethod
     def detect_period(cls, filename):
         fname = filename.upper()
@@ -128,10 +126,6 @@ class ColumnMapper:
     @classmethod
     def get_sheet_name(cls, period):
         return cls.PERIOD_SHEET_MAP.get(period)
-
-    @classmethod
-    def is_uppercase_field(cls, field_name):
-        return field_name in cls.UPPERCASE_FIELDS
 
     @classmethod
     def extract_year_from_period(cls, period):
